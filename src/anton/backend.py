@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+from pathlib import Path
 from time import perf_counter
 from typing import Any
 
@@ -99,6 +101,12 @@ class BackendClient:
     async def instagram_page(
         self, order_id: str, limit: int, cursor: str | None = None
     ) -> InstagramDataPage:
+        page, _ = await self._instagram_page_payload(order_id, limit, cursor)
+        return page
+
+    async def _instagram_page_payload(
+        self, order_id: str, limit: int, cursor: str | None = None
+    ) -> tuple[InstagramDataPage, dict[str, Any]]:
         params: dict[str, str | int] = {"limit": limit}
         if cursor:
             params["after"] = cursor
@@ -106,17 +114,32 @@ class BackendClient:
             "GET", f"/api/internal/orders/{order_id}/instagram-data", params=params
         )
         response.raise_for_status()
-        return InstagramDataPage.model_validate(response.json())
+        payload = response.json()
+        return InstagramDataPage.model_validate(payload), payload
 
     async def collect_instagram_data(
-        self, order_id: str, page_size: int, max_items: int
+        self,
+        order_id: str,
+        page_size: int,
+        max_items: int,
+        raw_pages_directory: Path | None = None,
     ) -> InstagramDataPage:
         logger.info("● Collecting authorized Instagram data · limit=%d", max_items)
         cursor: str | None = None
         first: InstagramDataPage | None = None
         all_media = []
+        page_number = 0
         while len(all_media) < max_items:
-            page = await self.instagram_page(order_id, page_size, cursor)
+            page, raw_payload = await self._instagram_page_payload(order_id, page_size, cursor)
+            page_number += 1
+            if raw_pages_directory:
+                raw_pages_directory.mkdir(parents=True, exist_ok=True)
+                destination = raw_pages_directory / f"instagram-data-page-{page_number:03d}.json"
+                temporary = destination.with_suffix(".tmp")
+                temporary.write_text(
+                    json.dumps(raw_payload, ensure_ascii=False, indent=2), encoding="utf-8"
+                )
+                temporary.replace(destination)
             if first is None:
                 first = page
             all_media.extend(page.media[: max_items - len(all_media)])

@@ -9,8 +9,10 @@ from anton.analyzer import ContentAnalyzer, write_snapshot
 from anton.backend import BackendClient, InstagramReconnectRequired
 from anton.config import Settings
 from anton.db import Database, LocalStage
+from anton.local_data import snapshot_path
+from anton.metrics import account_metrics, media_metrics
 from anton.report import build_report
-from anton.schemas import AccountSynthesis, InstagramDataPage
+from anton.schemas import AccountSynthesis, InstagramDataPage, PostFinding, VisualAnalysis
 from anton.storage import ReportStorage
 from anton.synthesis import synthesize_account
 
@@ -43,11 +45,92 @@ class Pipeline:
             logger.info("✓ Using saved Instagram snapshot · %s", path)
             return InstagramDataPage.model_validate_json(path.read_text(encoding="utf-8"))
         data = await self.backend.collect_instagram_data(
-            order_id, self.settings.media_page_size, self.settings.max_media_items
+            order_id,
+            self.settings.media_page_size,
+            self.settings.max_media_items,
+            self.settings.data_directory / "orders" / order_id / "endpoint-responses",
         )
         write_snapshot(path, data.model_dump(mode="json"))
         self.db.update_job(order_id, stage=LocalStage.DATA_COLLECTED, snapshot_path=str(path))
         return data
+
+    async def regenerate_local(
+        self,
+        order_id: str,
+        output_path: Path | None = None,
+        language: str | None = None,
+    ) -> Path:
+        """Build a new PDF using only locally persisted order data."""
+        path = snapshot_path(self.settings, self.db, order_id)
+        if not path.exists():
+            raise FileNotFoundError(f"No local Instagram snapshot found for order {order_id}")
+        data = InstagramDataPage.model_validate_json(path.read_text(encoding="utf-8"))
+        findings: list[PostFinding] = []
+        cached_count = 0
+        image_count = 0
+        for item in data.media:
+            image_path = (
+                self.settings.data_directory / "orders" / order_id / "media" / f"{item.id}.jpg"
+            )
+            if not image_path.exists():
+                image_path = None
+            else:
+                image_count += 1
+
+            cached = self.db.get_latest_media_result(order_id, item.id)
+            if cached:
+                visual = VisualAnalysis.model_validate_json(cached)
+                cached_count += 1
+            else:
+                visual = ContentAnalyzer._text_only_analysis(item)
+            metrics, rates = media_metrics(item)
+            findings.append(
+                PostFinding(
+                    media_id=item.id,
+                    media_type=item.media_type,
+                    timestamp=item.timestamp,
+                    caption_excerpt=(item.caption or "")[:240] or None,
+                    thumbnail_path=str(image_path) if image_path else None,
+                    metrics=metrics,
+                    rates=rates,
+                    visual=visual,
+                )
+            )
+
+        logger.info(
+            "● Rebuilding from local data · order=%s · posts=%d · analyses=%d · images=%d",
+            order_id,
+            len(findings),
+            cached_count,
+            image_count,
+        )
+        job = self.db.get_job(order_id)
+        if job and job.synthesis_json:
+            synthesis = AccountSynthesis.model_validate_json(job.synthesis_json)
+            logger.info("✓ Using saved account synthesis")
+        else:
+            logger.info("● No saved synthesis; generating one with the local text model")
+            synthesis, _ = await synthesize_account(
+                self.llm,
+                data.account,
+                data.accountInsights,
+                findings,
+                language or self.settings.report_language,
+            )
+
+        aggregates = account_metrics(findings)
+        destination = output_path or self.settings.report_directory / f"{order_id}-local.pdf"
+        build_report(
+            destination,
+            self.settings.report_brand_name,
+            language or self.settings.report_language,
+            data.account,
+            synthesis,
+            findings,
+            aggregates,
+        )
+        logger.info("✓ Local PDF rebuilt · %s", destination.resolve())
+        return destination
 
     async def process_claim(self, claim) -> None:
         started = perf_counter()
@@ -86,8 +169,6 @@ class Pipeline:
         if current and current.synthesis_json:
             logger.info("✓ Using saved account synthesis")
             synthesis = AccountSynthesis.model_validate_json(current.synthesis_json)
-            from anton.metrics import account_metrics
-
             aggregates = account_metrics(findings)
         else:
             logger.info("● Finding account-wide patterns with the local text model")

@@ -91,6 +91,43 @@ visual-analysis progress, synthesis, PDF creation, and completion. Temporarily u
 and local-model request timings. Tokens, authorization headers, captions, prompts,
 media URLs, and customer email addresses are never logged.
 
+## Rebuild and export local order data
+
+Anton keeps the Instagram snapshot, local AI analyses, synthesis and downloaded images by
+default. This allows report design and analysis changes to be tested without claiming the order
+again or calling MotifCue/Instagram.
+
+Rebuild a PDF from one saved order:
+
+```bash
+anton regenerate ORDER_ID
+```
+
+The default output is `reports/ORDER_ID-local.pdf`. You can choose another path or language:
+
+```bash
+anton regenerate ORDER_ID --output reports/test-v2.pdf --language es
+anton regenerate ORDER_ID --prod
+```
+
+Export everything Anton has locally for an order into one readable JSON file:
+
+```bash
+anton export ORDER_ID
+anton export ORDER_ID --output exports/order-debug.json
+```
+
+The export contains the persisted Instagram payload, each raw paginated endpoint response saved
+during collection, local job metadata, account synthesis, per-media analyses and a local
+media-file manifest. Older orders collected before this feature include the consolidated snapshot
+but may not have the individual response pages. The file may contain customer captions and media
+URLs, so share it privately. It never contains an Instagram token because Anton never receives
+one.
+
+Keep `CLEANUP_MEDIA_AFTER_SUCCESS=false` to preserve thumbnails for offline regeneration. Setting
+it to `true` removes only downloaded media after success; the snapshot, database and analyses are
+still retained.
+
 ## Report storage
 
 `REPORT_STORAGE_DRIVER=local_only` is the default. It writes `reports/<order-id>.pdf`,
@@ -104,7 +141,7 @@ For S3-compatible storage, set `REPORT_STORAGE_DRIVER=s3` and fill the `S3_*` va
 ## Privacy and operations
 
 - Logs contain order IDs and stages, never tokens, captions, email addresses, media URLs, or prompts.
-- Downloaded images are placed under `data/orders/<order-id>` and removed after a successful report by default.
+- Downloaded images are placed under `data/orders/<order-id>` and retained by default for local regeneration.
 - The worker processes visual items with limited concurrency instead of sending an entire account to the model at once.
 - Only the final structured summaries and numeric metrics are used for account-level synthesis.
 - Failed orders receive a short machine-safe error code; private exception details remain local.

@@ -111,6 +111,27 @@ class Database:
             )
             return row.result_json if row else None
 
+    def get_latest_media_result(self, order_id: str, media_id: str) -> str | None:
+        """Return the saved analysis without requiring the original media fingerprint."""
+        with self.sessions() as session:
+            row = session.scalar(
+                select(MediaAnalysisRecord).where(
+                    MediaAnalysisRecord.order_id == order_id,
+                    MediaAnalysisRecord.media_id == media_id,
+                )
+            )
+            return row.result_json if row else None
+
+    def media_results(self, order_id: str) -> list[MediaAnalysisRecord]:
+        with self.sessions() as session:
+            return list(
+                session.scalars(
+                    select(MediaAnalysisRecord)
+                    .where(MediaAnalysisRecord.order_id == order_id)
+                    .order_by(MediaAnalysisRecord.media_id)
+                )
+            )
+
     def save_media_result(
         self, order_id: str, media_id: str, fingerprint: str, result_json: str
     ) -> None:

@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     max_media_items: int = Field(default=100, ge=1, le=500)
     media_analysis_concurrency: int = Field(default=2, ge=1, le=8)
     max_media_bytes: int = Field(default=50 * 1024 * 1024, ge=1_000_000)
-    cleanup_media_after_success: bool = True
+    cleanup_media_after_success: bool = False
     data_directory: Path = Path("./data")
     report_directory: Path = Path("./reports")
     database_url: str = "sqlite:///./data/anton.db"
