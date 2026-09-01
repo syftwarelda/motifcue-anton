@@ -99,13 +99,12 @@ class LlamaClient:
             ) as exc:
                 error = exc
                 if attempt == self.max_retries:
-                    raise RuntimeError(
-                        "The local model did not return valid structured data"
-                    ) from exc
+                    raise RuntimeError("The local model request failed after retries") from exc
                 logger.warning(
-                    "Local AI response failed validation; retrying · model=%s · attempt=%d",
+                    "Local AI response failed; retrying · model=%s · attempt=%d · reason=%s",
                     model,
                     attempt + 1,
+                    type(exc).__name__,
                 )
                 await asyncio.sleep(2**attempt)
         raise RuntimeError("Unreachable") from error

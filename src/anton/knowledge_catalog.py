@@ -1,3 +1,9 @@
+RETIRED_SOURCE_IDS = {
+    "instagram-branded-content",
+    "instagram-music-library",
+}
+
+
 OFFICIAL_SOURCES = [
     {
         "id": "instagram-best-practices-hub",
@@ -45,21 +51,39 @@ OFFICIAL_SOURCES = [
         "refresh_days": 60,
     },
     {
-        "id": "instagram-branded-content",
-        "title": "What Instagram considers branded content",
-        "url": "https://www.facebook.com/help/instagram/616901995832907",
+        "id": "instagram-original-content-distribution",
+        "title": "Helping creators find new audiences with original content",
+        "url": "https://about.fb.com/ltam/news/2024/05/ayudando-a-los-creadores-a-encontrar-nuevas-audiencias/",
         "source_type": "meta_official",
-        "context": "policy",
-        "tags": ["branded-content", "paid-partnership", "affiliate", "disclosure"],
+        "context": "organic",
+        "tags": ["original-content", "recommendations", "discovery", "distribution"],
         "refresh_days": 30,
     },
     {
-        "id": "instagram-music-library",
-        "title": "Access to the licensed music library on Instagram",
-        "url": "https://www.facebook.com/help/instagram/402084904469945",
+        "id": "instagram-trial-reels",
+        "title": "Trial Reels for testing content with non-followers",
+        "url": "https://about.fb.com/news/2024/12/trial-reels-try-content-non-followers-first-see-what-perfoms-best/",
         "source_type": "meta_official",
-        "context": "policy",
-        "tags": ["music", "copyright", "reels", "commercial-use"],
+        "context": "experimentation",
+        "tags": ["trial-reels", "non-followers", "testing", "reach", "discovery"],
+        "refresh_days": 30,
+    },
+    {
+        "id": "instagram-reels-retention-insights",
+        "title": "Reels replays and retention insights",
+        "url": "https://about.fb.com/news/2023/11/new-ways-to-create-content-on-instagram/",
+        "source_type": "meta_official",
+        "context": "measurement",
+        "tags": ["reels", "retention", "watch-time", "replays", "insights"],
+        "refresh_days": 30,
+    },
+    {
+        "id": "instagram-community-prompts-insights",
+        "title": "Community replies, prompts and insights",
+        "url": "https://about.fb.com/news/2024/12/get-closer-to-your-community-with-replies-prompts-and-insights/",
+        "source_type": "meta_official",
+        "context": "community",
+        "tags": ["community", "replies", "prompts", "insights", "engagement"],
         "refresh_days": 30,
     },
     {

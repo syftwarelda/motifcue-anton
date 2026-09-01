@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class InstagramConnection(BaseModel):
@@ -133,6 +133,37 @@ class PostFinding(BaseModel):
     visual: VisualAnalysis
 
 
+class GrowthOpportunity(BaseModel):
+    objective: str
+    opportunity: str
+    evidence: str
+    play: str
+    primary_metric: str
+
+
+class ExperimentPlan(BaseModel):
+    hypothesis: str
+    control: str
+    variant: str
+    constants: list[str] = Field(default_factory=list)
+    primary_metric: str
+    secondary_metrics: list[str] = Field(default_factory=list)
+    duration: str
+    decision_rule: str
+
+    @model_validator(mode="after")
+    def avoid_unsupported_percentage_targets(self) -> ExperimentPlan:
+        if "%" not in f"{self.hypothesis} {self.decision_rule}":
+            return self
+        metric = self.primary_metric.rstrip(".")
+        self.hypothesis = f"If the variant is used, {metric} will improve relative to the control."
+        self.decision_rule = (
+            f"Adopt if the variant wins on {metric} in most comparable posts without weakening "
+            "secondary metrics; iterate if results are mixed; stop if it performs lower."
+        )
+        return self
+
+
 class AccountSynthesis(BaseModel):
     account_positioning: str
     executive_summary: list[str] = Field(min_length=3, max_length=5)
@@ -143,5 +174,8 @@ class AccountSynthesis(BaseModel):
     keep: list[str] = Field(default_factory=list)
     change: list[str] = Field(default_factory=list)
     tests: list[str] = Field(default_factory=list)
+    growth_thesis: str | None = None
+    growth_opportunities: list[GrowthOpportunity] = Field(default_factory=list, max_length=4)
+    primary_experiment: ExperimentPlan | None = None
     thirty_day_plan: list[str] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)

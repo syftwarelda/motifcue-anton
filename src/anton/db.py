@@ -230,6 +230,16 @@ class Database:
                 session.scalars(select(KnowledgeSourceRecord).order_by(KnowledgeSourceRecord.id))
             )
 
+    def retire_knowledge_sources(self, source_ids: set[str]) -> None:
+        now = utcnow()
+        with self.sessions.begin() as session:
+            for source_id in source_ids:
+                source = session.get(KnowledgeSourceRecord, source_id)
+                if source is not None:
+                    source.status = "retired"
+                    source.last_error = None
+                    source.updated_at = now
+
     def knowledge_revision_by_hash(
         self, source_id: str, content_hash: str
     ) -> KnowledgeRevisionRecord | None:

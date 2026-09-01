@@ -27,7 +27,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from anton.schemas import Account, AccountSynthesis, PostFinding
+from anton.schemas import Account, AccountSynthesis, ExperimentPlan, GrowthOpportunity, PostFinding
 
 INK = colors.HexColor("#171719")
 CREAM = colors.HexColor("#F7F3EA")
@@ -103,6 +103,27 @@ COPY = {
         "actions_intro": (
             "The next month should improve clarity and repeatability, not add random formats."
         ),
+        "growth": "GROWTH STRATEGY",
+        "growth_title": "Where the next gains can come from.",
+        "growth_intro": (
+            "Three evidence-led opportunities, each connected to an action and a decision metric."
+        ),
+        "opportunity": "OPPORTUNITY",
+        "evidence": "WHY THIS FITS",
+        "play": "WHAT TO DO",
+        "primary_metric": "DECISION METRIC",
+        "experiment": "EXPERIMENT BLUEPRINT",
+        "experiment_title": "Test one change. Learn something useful.",
+        "experiment_intro": (
+            "A controlled test that separates the creative change from everything held constant."
+        ),
+        "hypothesis": "HYPOTHESIS",
+        "control": "CONTROL",
+        "variant": "VARIANT",
+        "constants": "KEEP CONSTANT",
+        "secondary_metrics": "DIAGNOSTIC METRICS",
+        "duration": "DURATION",
+        "decision_rule": "DECISION RULE",
         "focus": "30-DAY FOCUS",
         "plan": "30-DAY PLAN",
         "plan_title": "Four weeks with a clear purpose.",
@@ -215,6 +236,27 @@ COPY = {
         "actions_intro": (
             "El próximo mes debe mejorar claridad y repetición, no sumar formatos al azar."
         ),
+        "growth": "ESTRATEGIA DE CRECIMIENTO",
+        "growth_title": "De dónde puede venir el próximo avance.",
+        "growth_intro": (
+            "Tres oportunidades basadas en evidencia, cada una con acción y métrica de decisión."
+        ),
+        "opportunity": "OPORTUNIDAD",
+        "evidence": "POR QUÉ ENCAJA",
+        "play": "QUÉ HACER",
+        "primary_metric": "MÉTRICA DE DECISIÓN",
+        "experiment": "DISEÑO DEL EXPERIMENTO",
+        "experiment_title": "Prueba un cambio. Aprende algo útil.",
+        "experiment_intro": (
+            "Una prueba controlada que separa el cambio creativo de todo lo que se mantiene igual."
+        ),
+        "hypothesis": "HIPÓTESIS",
+        "control": "CONTROL",
+        "variant": "VARIANTE",
+        "constants": "MANTENER CONSTANTE",
+        "secondary_metrics": "MÉTRICAS DE DIAGNÓSTICO",
+        "duration": "DURACIÓN",
+        "decision_rule": "REGLA DE DECISIÓN",
         "focus": "FOCO DE 30 DÍAS",
         "plan": "PLAN DE 30 DÍAS",
         "plan_title": "Cuatro semanas con un propósito claro.",
@@ -760,6 +802,59 @@ def _action_card(title: str, items: list[str], background, styles: dict) -> Tabl
     return table
 
 
+def _opportunity_card(opportunity, background, styles: dict, copy: dict[str, str]) -> Table:
+    content: list[Flowable] = [
+        _p(_shorten(opportunity.objective.upper(), 32), styles["metric_label"]),
+        _p(_shorten(opportunity.opportunity, 120), styles["body_bold"]),
+        Spacer(1, 4 * mm),
+        _p(copy["evidence"], styles["metric_label"]),
+        _p(_shorten(opportunity.evidence, 150), styles["small"]),
+        Spacer(1, 4 * mm),
+        _p(copy["play"], styles["metric_label"]),
+        _p(_shorten(opportunity.play, 170), styles["small"]),
+        Spacer(1, 4 * mm),
+        _p(copy["primary_metric"], styles["metric_label"]),
+        _p(_shorten(opportunity.primary_metric, 70), styles["body_bold"]),
+    ]
+    table = Table([[content]], colWidths=[51 * mm], rowHeights=[121 * mm])
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), background),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6 * mm),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6 * mm),
+                ("TOPPADDING", (0, 0), (-1, -1), 6 * mm),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6 * mm),
+            ]
+        )
+    )
+    return table
+
+
+def _experiment_panel(
+    label: str, text: str, background, styles: dict, *, width: float = 78 * mm
+) -> Table:
+    panel = Table(
+        [[_p(label, styles["metric_label"])], [_p(_shorten(text, 180), styles["small"])]],
+        colWidths=[width],
+        rowHeights=[8 * mm, 27 * mm],
+    )
+    panel.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), background),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6 * mm),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6 * mm),
+                ("TOPPADDING", (0, 0), (-1, -1), 4 * mm),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4 * mm),
+            ]
+        )
+    )
+    return panel
+
+
 def _top_post_card(
     finding: PostFinding,
     rank: int,
@@ -1277,27 +1372,114 @@ def build_report(
     story.extend([two_columns, PageBreak()])
 
     story.extend(
-        _page_intro(copy, "actions", "actions_title", "actions_intro", styles, document.width)
+        _page_intro(copy, "growth", "growth_title", "growth_intro", styles, document.width)
     )
-    action_table = Table(
+    opportunities = list(synthesis.growth_opportunities[:3])
+    legacy_groups = [synthesis.keep, synthesis.change, synthesis.tests]
+    legacy_objectives = [copy["keep"], copy["change"], copy["test"]]
+    while len(opportunities) < 3:
+        index = len(opportunities)
+        items = legacy_groups[index] or synthesis.executive_summary
+        text = items[0] if items else synthesis.account_positioning
+        opportunities.append(
+            GrowthOpportunity(
+                objective=legacy_objectives[index],
+                opportunity=text,
+                evidence=synthesis.account_positioning,
+                play=text,
+                primary_metric=copy["rate"],
+            )
+        )
+    opportunity_table = Table(
         [
             [
-                _action_card(copy["keep"], synthesis.keep, RED, styles),
-                _action_card(copy["change"], synthesis.change, YELLOW, styles),
-                _action_card(copy["test"], synthesis.tests, MINT, styles),
+                _opportunity_card(opportunities[0], RED, styles, copy),
+                _opportunity_card(opportunities[1], YELLOW, styles, copy),
+                _opportunity_card(opportunities[2], MINT, styles, copy),
             ]
         ],
         colWidths=[53 * mm] * 3,
         hAlign="LEFT",
     )
-    action_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
-    focus_text = (synthesis.change or synthesis.tests or synthesis.executive_summary)[0]
+    opportunity_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
+    growth_thesis = (
+        synthesis.growth_thesis
+        or (synthesis.change or synthesis.tests or synthesis.executive_summary)[0]
+    )
     story.extend(
         [
-            action_table,
-            Spacer(1, 8 * mm),
+            opportunity_table,
+            Spacer(1, 7 * mm),
             _p(copy["focus"], styles["eyebrow"]),
-            _dark_callout(focus_text, styles),
+            _dark_callout(growth_thesis, styles),
+            PageBreak(),
+        ]
+    )
+
+    experiment = synthesis.primary_experiment
+    if experiment is None:
+        fallback_test = (synthesis.tests or synthesis.change or synthesis.executive_summary)[0]
+        experiment = ExperimentPlan(
+            hypothesis=fallback_test,
+            control=synthesis.account_positioning,
+            variant=fallback_test,
+            constants=synthesis.content_pillars[:2],
+            primary_metric=copy["rate"],
+            secondary_metrics=[copy["reach"], copy["saves"], copy["shares"]],
+            duration="4 weeks",
+            decision_rule=fallback_test,
+        )
+    story.extend(
+        _page_intro(
+            copy,
+            "experiment",
+            "experiment_title",
+            "experiment_intro",
+            styles,
+            document.width,
+        )
+    )
+    story.extend(
+        [
+            _p(copy["hypothesis"], styles["eyebrow"]),
+            _dark_callout(experiment.hypothesis, styles),
+            Spacer(1, 4 * mm),
+            Table(
+                [
+                    [
+                        _experiment_panel(copy["control"], experiment.control, WHITE, styles),
+                        _experiment_panel(copy["variant"], experiment.variant, MINT, styles),
+                    ]
+                ],
+                colWidths=[80 * mm, 80 * mm],
+                hAlign="LEFT",
+            ),
+            Spacer(1, 4 * mm),
+            Table(
+                [
+                    [
+                        _experiment_panel(
+                            copy["constants"],
+                            " · ".join(experiment.constants[:4]),
+                            BLUE,
+                            styles,
+                        ),
+                        _experiment_panel(
+                            copy["primary_metric"], experiment.primary_metric, YELLOW, styles
+                        ),
+                    ]
+                ],
+                colWidths=[80 * mm, 80 * mm],
+                hAlign="LEFT",
+            ),
+            Spacer(1, 4 * mm),
+            _p(copy["secondary_metrics"], styles["eyebrow"]),
+            _p(_shorten(" · ".join(experiment.secondary_metrics[:3]), 180), styles["small"]),
+            Spacer(1, 3 * mm),
+            _p(f"{copy['duration']}: {experiment.duration}", styles["body_bold"]),
+            Spacer(1, 3 * mm),
+            _p(copy["decision_rule"], styles["eyebrow"]),
+            _p(_shorten(experiment.decision_rule, 240), styles["body_bold"]),
             PageBreak(),
         ]
     )

@@ -1,7 +1,29 @@
 from datetime import UTC, datetime
 
 from anton.report import build_report
-from anton.schemas import Account, AccountSynthesis, PostFinding, VisualAnalysis
+from anton.schemas import (
+    Account,
+    AccountSynthesis,
+    ExperimentPlan,
+    GrowthOpportunity,
+    PostFinding,
+    VisualAnalysis,
+)
+
+
+def test_experiment_replaces_unsupported_percentage_target() -> None:
+    experiment = ExperimentPlan(
+        hypothesis="The variant will improve reach by 20%.",
+        control="Current opening.",
+        variant="Question-led opening.",
+        primary_metric="reach",
+        duration="Four comparable posts",
+        decision_rule="Adopt if reach rises 20%.",
+    )
+
+    assert "%" not in experiment.hypothesis
+    assert "%" not in experiment.decision_rule
+    assert "relative to the control" in experiment.hypothesis
 
 
 def test_build_report_smoke(tmp_path) -> None:
@@ -19,6 +41,42 @@ def test_build_report_smoke(tmp_path) -> None:
         keep=["Lead with a useful promise."],
         change=["Make the opening frame more specific."],
         tests=["Compare two hook styles on the same topic."],
+        growth_thesis="Turn useful topics into a repeatable discovery and retention system.",
+        growth_opportunities=[
+            GrowthOpportunity(
+                objective="Discovery",
+                opportunity="Make the promise visible in the opening frame.",
+                evidence="Useful topics lead the available results.",
+                play="Publish new variants of proven topics with a concrete opening promise.",
+                primary_metric="Reach from non-followers",
+            ),
+            GrowthOpportunity(
+                objective="Retention",
+                opportunity="Build a clear narrative sequence.",
+                evidence="Direct framing already makes the subject easy to understand.",
+                play="Use a problem, process, and payoff sequence in each new carousel.",
+                primary_metric="Saves per 100 reached",
+            ),
+            GrowthOpportunity(
+                objective="Community",
+                opportunity="Invite a specific response tied to the topic.",
+                evidence="Practical posts lead the available results.",
+                play="End each new post with one answerable question about the viewer's context.",
+                primary_metric="Comments per 100 reached",
+            ),
+        ],
+        primary_experiment=ExperimentPlan(
+            hypothesis="A concrete opening promise will increase discovery without reducing depth.",
+            control="Current descriptive opening frame.",
+            variant="A result-led promise in the opening frame.",
+            constants=["topic", "format", "publishing window"],
+            primary_metric="Reach from non-followers",
+            secondary_metrics=["retention", "saves per 100 reached"],
+            duration="Six comparable posts",
+            decision_rule=(
+                "Adopt when the variant wins on reach in four of six posts without lower saves."
+            ),
+        ),
         thirty_day_plan=["Week 1: publish the first controlled test."],
     )
     finding = PostFinding(

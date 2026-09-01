@@ -30,6 +30,27 @@ def _database(tmp_path) -> Database:
     return db
 
 
+def test_register_catalog_retires_only_known_legacy_sources(tmp_path, monkeypatch) -> None:
+    db = _database(tmp_path)
+    for source_id in ["instagram-branded-content", "custom-source"]:
+        db.upsert_knowledge_source(
+            id=source_id,
+            title=source_id,
+            url=f"https://example.com/{source_id}",
+            source_type="curated",
+            context="organic",
+            tags_json="[]",
+            status="approved",
+            refresh_days=30,
+        )
+    monkeypatch.setattr("anton.knowledge.OFFICIAL_SOURCES", [])
+
+    KnowledgeService(db).register_catalog()
+
+    assert db.knowledge_source("instagram-branded-content").status == "retired"
+    assert db.knowledge_source("custom-source").status == "approved"
+
+
 @pytest.mark.asyncio
 async def test_sync_requires_review_before_replacing_active_knowledge(
     tmp_path, monkeypatch

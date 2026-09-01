@@ -12,7 +12,7 @@ from html.parser import HTMLParser
 import httpx
 
 from anton.db import Database
-from anton.knowledge_catalog import OFFICIAL_SOURCES
+from anton.knowledge_catalog import OFFICIAL_SOURCES, RETIRED_SOURCE_IDS
 from anton.schemas import Account, PostFinding
 
 logger = logging.getLogger(__name__)
@@ -127,6 +127,7 @@ class KnowledgeService:
                 status="approved",
                 refresh_days=source["refresh_days"],
             )
+        self.db.retire_knowledge_sources(RETIRED_SOURCE_IDS)
 
     @staticmethod
     def _chunks(content: str, target_size: int = 1400, overlap: int = 180) -> list[str]:
@@ -334,7 +335,10 @@ class KnowledgeService:
     async def report_context(
         self, account: Account, findings: Iterable[PostFinding], limit: int
     ) -> list[dict]:
-        parts = ["Instagram creator content strategy engagement reach"]
+        parts = [
+            "Instagram creator growth strategy original content discovery non-followers "
+            "retention community experimentation trial reels engagement reach"
+        ]
         if account.biography:
             parts.append(account.biography[:300])
         media_types: set[str] = set()
@@ -348,12 +352,23 @@ class KnowledgeService:
         parts.extend(sorted(media_types))
         parts.extend(sorted(topic_tags)[:15])
         parts.extend(sorted(intents))
-        results = await self.semantic_search(" ".join(parts), limit)
+        candidates = await self.semantic_search(" ".join(parts), limit * 2)
+        results = []
+        used_sources: set[str] = set()
+        for candidate in candidates:
+            if candidate.source_id in used_sources:
+                continue
+            results.append(candidate)
+            used_sources.add(candidate.source_id)
+            if len(results) >= limit:
+                break
         return [result.as_prompt_context() for result in results]
 
     def status_rows(self) -> list[dict]:
         rows = []
         for source in self.db.knowledge_sources():
+            if source.status == "retired":
+                continue
             pending = self.db.pending_knowledge_revision(source.id)
             rows.append(
                 {
