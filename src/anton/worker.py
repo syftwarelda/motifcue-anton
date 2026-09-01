@@ -23,6 +23,11 @@ class Worker:
             str(settings.motifcue_api_base_url),
             settings.anton_internal_api_key.get_secret_value(),
             settings.request_timeout_seconds,
+            (
+                settings.vercel_automation_bypass_secret.get_secret_value()
+                if settings.vercel_automation_bypass_secret
+                else None
+            ),
         )
         self.llm = LlamaClient(
             str(settings.llm_base_url),

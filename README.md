@@ -36,6 +36,16 @@ ollama pull llama3.2
 ollama pull llama3.2-vision:11b
 ```
 
+If the staging deployment uses Vercel Deployment Protection, create a Protection Bypass for
+Automation secret in Vercel and copy it into Anton's environment:
+
+```bash
+VERCEL_AUTOMATION_BYPASS_SECRET="your-vercel-bypass-secret"
+```
+
+Anton sends it only through the `x-vercel-protection-bypass` header. This is separate from
+`ANTON_INTERNAL_API_KEY`; both protections remain active.
+
 Run continuously:
 
 ```bash

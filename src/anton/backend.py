@@ -20,14 +20,23 @@ class InstagramReconnectRequired(Exception):
 
 
 class BackendClient:
-    def __init__(self, base_url: str, api_key: str, timeout: float) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str,
+        timeout: float,
+        vercel_bypass_secret: str | None = None,
+    ) -> None:
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Accept": "application/json",
+            "Cache-Control": "no-store",
+        }
+        if vercel_bypass_secret:
+            headers["x-vercel-protection-bypass"] = vercel_bypass_secret
         self.client = httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Accept": "application/json",
-                "Cache-Control": "no-store",
-            },
+            headers=headers,
             timeout=httpx.Timeout(timeout),
         )
 

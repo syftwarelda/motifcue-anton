@@ -11,6 +11,7 @@ class Settings(BaseSettings):
 
     motifcue_api_base_url: AnyHttpUrl
     anton_internal_api_key: SecretStr
+    vercel_automation_bypass_secret: SecretStr | None = None
 
     poll_interval_seconds: float = Field(default=20, ge=1)
     request_timeout_seconds: float = Field(default=45, ge=5)
