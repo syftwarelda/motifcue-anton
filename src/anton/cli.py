@@ -186,6 +186,15 @@ def _llm(settings) -> LlamaClient:
         settings.llm_embedding_model,
         settings.llm_timeout_seconds,
         settings.llm_max_retries,
+        priority=settings.llm_priority,
+        embedding_base_url=(
+            str(settings.llm_embedding_base_url) if settings.llm_embedding_base_url else None
+        ),
+        embedding_api_key=(
+            settings.llm_embedding_api_key.get_secret_value()
+            if settings.llm_embedding_api_key
+            else None
+        ),
     )
 
 

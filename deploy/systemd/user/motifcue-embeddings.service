@@ -1,0 +1,18 @@
+[Unit]
+Description=MotifCue local Nomic embedding server
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStartPre=-/usr/bin/docker rm -f motifcue-nomic-embeddings
+ExecStart=/usr/bin/docker run --rm --name motifcue-nomic-embeddings --network host --volume %h/models/nomic-embed-text-v2-moe:/models:ro ghcr.io/ggml-org/llama.cpp:server-cuda --model /models/nomic-embed-text-v2-moe.Q4_K_M.gguf --alias nomic-embed-text-v2-moe --host 127.0.0.1 --port 18083 --ctx-size 512 --batch-size 512 --ubatch-size 512 --embeddings --pooling mean --n-gpu-layers 0 --no-webui
+ExecStop=-/usr/bin/docker stop motifcue-nomic-embeddings
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=180
+TimeoutStopSec=30
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

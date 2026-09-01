@@ -298,10 +298,11 @@ El archivo incluye:
 
 Gestiona la biblioteca RAG local que Anton consulta durante la síntesis estratégica.
 
-Antes del primer uso, instala el modelo local de embeddings:
+Antes del primer uso, comprueba el servicio local de embeddings Nomic:
 
 ```bash
-ollama pull nomic-embed-text
+systemctl --user status motifcue-embeddings.service
+curl --silent http://127.0.0.1:18083/health
 ```
 
 Descargar las fuentes oficiales y crear sus embeddings:
@@ -333,7 +334,8 @@ anton knowledge approve SOURCE_ID
 
 > [!success] RAG local
 > Los documentos, fragmentos y embeddings se guardan en SQLite. Las consultas de embeddings se
-> ejecutan contra el Ollama local configurado; no se envían documentos a un proveedor externo.
+> ejecutan contra Nomic v2 en el servidor llama.cpp local y exclusivo de CPU; no se envían
+> documentos a un proveedor externo ni se ocupa la cola GPU de Qwen.
 
 > [!important] Jerarquía de evidencia
 > El knowledge ofrece contexto y posibles experimentos. Nunca sustituye las métricas ni los

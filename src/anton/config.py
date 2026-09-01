@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     llm_text_model: str = "llama3.2:latest"
     llm_vision_model: str = "llama3.2-vision:11b"
     llm_embedding_model: str = "nomic-embed-text"
+    llm_embedding_base_url: AnyHttpUrl | None = None
+    llm_embedding_api_key: SecretStr | None = None
+    llm_priority: str | None = None
     llm_timeout_seconds: float = Field(default=180, ge=10)
     llm_max_retries: int = Field(default=2, ge=0, le=5)
     knowledge_context_chunks: int = Field(default=6, ge=0, le=20)
@@ -48,7 +51,12 @@ class Settings(BaseSettings):
     s3_secret_access_key: SecretStr | None = None
     s3_public_base_url: str | None = None
 
-    @field_validator("motifcue_api_base_url", "llm_base_url", mode="before")
+    @field_validator(
+        "motifcue_api_base_url",
+        "llm_base_url",
+        "llm_embedding_base_url",
+        mode="before",
+    )
     @classmethod
     def strip_trailing_slash(cls, value: object) -> object:
         return str(value).rstrip("/") if value else value

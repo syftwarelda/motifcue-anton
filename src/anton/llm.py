@@ -7,7 +7,7 @@ import logging
 import re
 from pathlib import Path
 from time import perf_counter
-from typing import TypeVar
+from typing import Literal, TypeVar
 
 import httpx
 from pydantic import BaseModel, ValidationError
@@ -26,19 +26,31 @@ class LlamaClient:
         embedding_model: str,
         timeout: float,
         max_retries: int,
+        priority: str | None = None,
+        embedding_base_url: str | None = None,
+        embedding_api_key: str | None = None,
     ) -> None:
         self.text_model = text_model
         self.vision_model = vision_model
         self.embedding_model = embedding_model
         self.max_retries = max_retries
+        headers = {"Authorization": f"Bearer {api_key}"}
+        if priority:
+            headers["x-anton-priority"] = priority
         self.client = httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
-            headers={"Authorization": f"Bearer {api_key}"},
+            headers=headers,
+            timeout=httpx.Timeout(timeout),
+        )
+        self.embedding_client = httpx.AsyncClient(
+            base_url=(embedding_base_url or base_url).rstrip("/"),
+            headers={"Authorization": f"Bearer {embedding_api_key or api_key}"},
             timeout=httpx.Timeout(timeout),
         )
 
     async def close(self) -> None:
         await self.client.aclose()
+        await self.embedding_client.aclose()
 
     @staticmethod
     def _extract_json(text: str) -> dict:
@@ -125,13 +137,19 @@ class LlamaClient:
         ]
         return await self._structured_completion(self.text_model, messages, schema)
 
-    async def embed(self, texts: list[str]) -> list[list[float]]:
-        """Create local embeddings through the OpenAI-compatible Ollama endpoint."""
+    async def embed(
+        self,
+        texts: list[str],
+        *,
+        task: Literal["search_document", "search_query"] | None = None,
+    ) -> list[list[float]]:
+        """Create embeddings through a separate OpenAI-compatible local endpoint."""
         if not texts:
             return []
-        response = await self.client.post(
+        inputs = [f"{task}: {text}" for text in texts] if task else texts
+        response = await self.embedding_client.post(
             "/embeddings",
-            json={"model": self.embedding_model, "input": texts},
+            json={"model": self.embedding_model, "input": inputs},
         )
         response.raise_for_status()
         rows = sorted(response.json()["data"], key=lambda row: row["index"])

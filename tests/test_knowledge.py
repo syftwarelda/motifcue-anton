@@ -10,8 +10,10 @@ from anton.knowledge import KnowledgeService
 
 class FakeEmbedder:
     embedding_model = "test-embedding"
+    tasks = []
 
-    async def embed(self, texts):
+    async def embed(self, texts, *, task=None):
+        self.tasks.append(task)
         return [
             [
                 float("visual" in text.lower()),
@@ -122,10 +124,13 @@ async def test_semantic_search_uses_local_embeddings(tmp_path) -> None:
         activate=True,
         chunks=["Visual hierarchy makes the main subject easier to understand."],
     )
-    service = KnowledgeService(db, embedder=FakeEmbedder())
+    embedder = FakeEmbedder()
+    embedder.tasks = []
+    service = KnowledgeService(db, embedder=embedder)
     assert await service.index() == 1
 
     results = await service.semantic_search("improve the visual presentation")
 
     assert results[0].source_id == "source-visual"
     assert results[0].score > 0
+    assert embedder.tasks == ["search_document", "search_query"]

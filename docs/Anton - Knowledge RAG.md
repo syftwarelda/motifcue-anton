@@ -28,26 +28,31 @@ Revisión versionada
     ↓
 Fragmentos de aproximadamente 1.400 caracteres
     ↓
-Embeddings locales con Ollama
+Embeddings multilingües con Nomic v2 en CPU
     ↓
 Índice local en SQLite
     ↓
 Recuperación semántica por cuenta
     ↓
-Síntesis estratégica con Llama
+Síntesis estratégica con Qwen
 ```
 
 ## Configuración
 
 ```env
-LLM_EMBEDDING_MODEL=nomic-embed-text
+LLM_EMBEDDING_BASE_URL=http://127.0.0.1:18083/v1
+LLM_EMBEDDING_API_KEY=not-needed
+LLM_EMBEDDING_MODEL=nomic-embed-text-v2-moe
 KNOWLEDGE_CONTEXT_CHUNKS=6
 ```
 
-Instalar el modelo:
+El servicio `motifcue-embeddings.service` incluido ejecuta llama.cpp solo en CPU. Qwen continúa
+usando el router GPU de Anton y nunca recibe las solicitudes de embeddings. Consulta el README
+para descargar el GGUF verificado y habilitar el servicio.
 
 ```bash
-ollama pull nomic-embed-text
+systemctl --user status motifcue-embeddings.service
+curl --silent http://127.0.0.1:18083/health
 ```
 
 `KNOWLEDGE_CONTEXT_CHUNKS=0` desactiva la incorporación de knowledge en los reportes sin eliminar
@@ -98,7 +103,8 @@ Anton crea una consulta usando:
 - Biografía de la cuenta cuando está disponible.
 - Conceptos generales de estrategia, engagement y alcance.
 
-La consulta se convierte en un embedding local. Anton compara ese vector con los fragmentos
+Los documentos usan el prefijo `search_document` y las consultas `search_query`, como requiere
+Nomic. La consulta se convierte en un embedding local. Anton compara ese vector con los fragmentos
 activos mediante similitud coseno y entrega los más relevantes a la síntesis. Limita a dos
 fragmentos por fuente para evitar que un solo documento domine el contexto.
 

@@ -210,7 +210,9 @@ class KnowledgeService:
             )
             if not chunks:
                 break
-            embeddings = await self.embedder.embed([chunk.content for chunk in chunks])
+            embeddings = await self.embedder.embed(
+                [chunk.content for chunk in chunks], task="search_document"
+            )
             for chunk, embedding in zip(chunks, embeddings, strict=True):
                 self.db.save_knowledge_embedding(
                     chunk.id,
@@ -294,7 +296,7 @@ class KnowledgeService:
         if not candidates:
             return self.search(query, limit)
         try:
-            query_vector = (await self.embedder.embed([query]))[0]
+            query_vector = (await self.embedder.embed([query], task="search_query"))[0]
         except (httpx.HTTPError, KeyError, IndexError, RuntimeError, TypeError, ValueError):
             logger.warning("Knowledge semantic search failed; using lexical fallback")
             return self.search(query, limit)
