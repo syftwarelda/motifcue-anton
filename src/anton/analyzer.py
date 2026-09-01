@@ -38,20 +38,49 @@ class ContentAnalyzer:
             confidence=0.15,
         )
 
-    async def analyze_one(self, order_id: str, item: MediaItem) -> PostFinding:
+    async def analyze_one(
+        self,
+        order_id: str,
+        item: MediaItem,
+        *,
+        force_visual: bool = False,
+        refresh_media: bool = False,
+    ) -> PostFinding:
         async with self.semaphore:
             logger.debug("→ Preparing media %s · type=%s", item.id, item.media_type)
             image_path: Path | None = None
+            prepare_failed = False
             try:
-                image_path = await self.media.representative_image(order_id, item)
+                image_path = await self.media.representative_image(
+                    order_id, item, refresh=refresh_media
+                )
             except MediaDownloadError:
+                prepare_failed = True
+                retained_path = self.media.local_image_path(order_id, item)
+                image_path = retained_path if retained_path.exists() else None
                 logger.warning("media_prepare_failed order_id=%s media_id=%s", order_id, item.id)
 
             fingerprint = self.media.fingerprint(item, image_path)
             cached = self.db.get_media_result(order_id, item.id, fingerprint)
-            if cached:
+            previous = self.db.get_latest_media_result(order_id, item.id)
+            if force_visual and image_path and not prepare_failed:
+                logger.debug(
+                    "  Re-running representative image through local vision model · media=%s",
+                    item.id,
+                )
+                visual = await self.llm.analyze_image(
+                    image_path,
+                    VISUAL_SYSTEM_PROMPT,
+                    visual_user_prompt(item.media_type, item.caption),
+                    VisualAnalysis,
+                )
+                self.db.save_media_result(order_id, item.id, fingerprint, visual.model_dump_json())
+            elif cached:
                 logger.debug("  Using cached visual analysis · media=%s", item.id)
                 visual = VisualAnalysis.model_validate_json(cached)
+            elif previous:
+                logger.debug("  Using latest retained visual analysis · media=%s", item.id)
+                visual = VisualAnalysis.model_validate_json(previous)
             elif image_path:
                 logger.debug(
                     "  Sending representative image to local vision model · media=%s", item.id
@@ -80,9 +109,26 @@ class ContentAnalyzer:
                 visual=visual,
             )
 
-    async def analyze_all(self, order_id: str, items: list[MediaItem]) -> list[PostFinding]:
+    async def analyze_all(
+        self,
+        order_id: str,
+        items: list[MediaItem],
+        *,
+        force_visual: bool = False,
+        refresh_media: bool = False,
+    ) -> list[PostFinding]:
         logger.info("● Analyzing media with the local vision model · total=%d", len(items))
-        tasks = [asyncio.create_task(self.analyze_one(order_id, item)) for item in items]
+        tasks = [
+            asyncio.create_task(
+                self.analyze_one(
+                    order_id,
+                    item,
+                    force_visual=force_visual,
+                    refresh_media=refresh_media,
+                )
+            )
+            for item in items
+        ]
         results: list[PostFinding] = []
         for completed in asyncio.as_completed(tasks):
             results.append(await completed)

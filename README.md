@@ -112,6 +112,24 @@ anton regenerate ORDER_ID --output reports/test-v2.pdf --language es
 anton regenerate ORDER_ID --prod
 ```
 
+Create a fresh account-level AI analysis from the saved data and cached visual findings:
+
+```bash
+anton reanalyze ORDER_ID
+```
+
+To also download the saved Instagram thumbnails again and rerun every available image through
+the local vision model:
+
+```bash
+anton reanalyze ORDER_ID --refresh-images
+```
+
+The default output is `reports/ORDER_ID-reanalyzed.pdf`. Both variants are local-only: they do not
+claim an order, call MotifCue's internal API, or change the remote order status. Saved Instagram
+media URLs can expire; when a refresh fails, Anton retains the previous local image and cached
+visual analysis instead of replacing them with an empty result.
+
 Export everything Anton has locally for an order into one readable JSON file:
 
 ```bash

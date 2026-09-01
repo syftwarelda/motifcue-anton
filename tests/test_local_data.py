@@ -14,8 +14,56 @@ from anton.schemas import (
     InstagramDataPage,
     MediaItem,
     Paging,
+    PostFinding,
     VisualAnalysis,
 )
+
+
+class FreshSynthesisLlm:
+    async def synthesize(self, _system, _user, schema):
+        return schema(
+            account_positioning="Freshly analyzed creator positioning.",
+            executive_summary=["Fresh signal.", "Fresh pattern.", "Fresh next step."],
+            audience_response_patterns=["A newly evaluated response pattern."],
+            content_pillars=["Fresh pillar"],
+            format_patterns=["Fresh format"],
+            visual_identity=["Fresh visual identity"],
+            keep=["Keep the strongest signal."],
+            change=["Change one variable at a time."],
+            tests=["Run a fresh controlled test."],
+            thirty_day_plan=["Evaluate the fresh test."],
+        )
+
+
+class RecordingAnalyzer:
+    def __init__(self) -> None:
+        self.call = None
+
+    async def analyze_all(
+        self,
+        order_id,
+        items,
+        *,
+        force_visual=False,
+        refresh_media=False,
+    ):
+        self.call = {
+            "order_id": order_id,
+            "force_visual": force_visual,
+            "refresh_media": refresh_media,
+        }
+        item = items[0]
+        return [
+            PostFinding(
+                media_id=item.id,
+                media_type=item.media_type,
+                timestamp=item.timestamp,
+                caption_excerpt=item.caption,
+                metrics={"likes": 20, "comments": 3},
+                rates={},
+                visual=VisualAnalysis(summary="A newly inspected visual."),
+            )
+        ]
 
 
 def _settings(tmp_path) -> Settings:
@@ -115,3 +163,53 @@ async def test_regenerate_local_uses_snapshot_and_cache_without_backend(tmp_path
     assert output == settings.report_directory / "order-2-local.pdf"
     assert output.exists()
     assert output.stat().st_size > 1000
+
+
+@pytest.mark.asyncio
+async def test_reanalyze_local_replaces_synthesis_without_backend(tmp_path) -> None:
+    settings = _settings(tmp_path)
+    db = Database(settings.database_url)
+    db.create_schema()
+    _seed_order(settings, db, "order-3")
+    pipeline = Pipeline(
+        settings,
+        db,
+        backend=object(),
+        analyzer=object(),
+        storage=object(),
+        llm=FreshSynthesisLlm(),
+    )
+
+    output = await pipeline.reanalyze_local("order-3", language="es")
+
+    assert output == settings.report_directory / "order-3-reanalyzed.pdf"
+    assert output.exists()
+    saved = AccountSynthesis.model_validate_json(db.get_job("order-3").synthesis_json)
+    assert saved.account_positioning == "Freshly analyzed creator positioning."
+    assert db.get_job("order-3").stage == LocalStage.SYNTHESIZED
+
+
+@pytest.mark.asyncio
+async def test_reanalyze_refreshes_images_and_visual_analysis(tmp_path) -> None:
+    settings = _settings(tmp_path)
+    db = Database(settings.database_url)
+    db.create_schema()
+    _seed_order(settings, db, "order-4")
+    analyzer = RecordingAnalyzer()
+    pipeline = Pipeline(
+        settings,
+        db,
+        backend=object(),
+        analyzer=analyzer,
+        storage=object(),
+        llm=FreshSynthesisLlm(),
+    )
+
+    output = await pipeline.reanalyze_local("order-4", refresh_images=True)
+
+    assert output.exists()
+    assert analyzer.call == {
+        "order_id": "order-4",
+        "force_visual": True,
+        "refresh_media": True,
+    }

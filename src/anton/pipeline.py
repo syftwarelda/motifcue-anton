@@ -65,6 +65,38 @@ class Pipeline:
         if not path.exists():
             raise FileNotFoundError(f"No local Instagram snapshot found for order {order_id}")
         data = InstagramDataPage.model_validate_json(path.read_text(encoding="utf-8"))
+        findings = self._local_findings(order_id, data)
+
+        job = self.db.get_job(order_id)
+        if job and job.synthesis_json:
+            synthesis = AccountSynthesis.model_validate_json(job.synthesis_json)
+            logger.info("✓ Using saved account synthesis")
+        else:
+            logger.info("● No saved synthesis; generating one with the local text model")
+            synthesis, _ = await synthesize_account(
+                self.llm,
+                data.account,
+                data.accountInsights,
+                findings,
+                language or self.settings.report_language,
+            )
+
+        aggregates = account_metrics(findings)
+        destination = output_path or self.settings.report_directory / f"{order_id}-local.pdf"
+        build_report(
+            destination,
+            self.settings.report_brand_name,
+            language or self.settings.report_language,
+            data.account,
+            synthesis,
+            findings,
+            aggregates,
+        )
+        logger.info("✓ Local PDF rebuilt · %s", destination.resolve())
+        return destination
+
+    def _local_findings(self, order_id: str, data: InstagramDataPage) -> list[PostFinding]:
+        """Reconstruct findings without network or model calls."""
         findings: list[PostFinding] = []
         cached_count = 0
         image_count = 0
@@ -104,32 +136,65 @@ class Pipeline:
             cached_count,
             image_count,
         )
-        job = self.db.get_job(order_id)
-        if job and job.synthesis_json:
-            synthesis = AccountSynthesis.model_validate_json(job.synthesis_json)
-            logger.info("✓ Using saved account synthesis")
-        else:
-            logger.info("● No saved synthesis; generating one with the local text model")
-            synthesis, _ = await synthesize_account(
-                self.llm,
-                data.account,
-                data.accountInsights,
-                findings,
-                language or self.settings.report_language,
-            )
+        return findings
 
-        aggregates = account_metrics(findings)
-        destination = output_path or self.settings.report_directory / f"{order_id}-local.pdf"
+    async def reanalyze_local(
+        self,
+        order_id: str,
+        output_path: Path | None = None,
+        language: str | None = None,
+        *,
+        refresh_images: bool = False,
+    ) -> Path:
+        """Create a fresh local AI analysis without touching the remote order."""
+        path = snapshot_path(self.settings, self.db, order_id)
+        if not path.exists():
+            raise FileNotFoundError(f"No local Instagram snapshot found for order {order_id}")
+        data = InstagramDataPage.model_validate_json(path.read_text(encoding="utf-8"))
+
+        if refresh_images:
+            logger.info(
+                "● Refreshing saved thumbnails and visual analyses · order=%s · posts=%d",
+                order_id,
+                len(data.media),
+            )
+            findings = await self.analyzer.analyze_all(
+                order_id,
+                data.media,
+                force_visual=True,
+                refresh_media=True,
+            )
+        else:
+            findings = self._local_findings(order_id, data)
+
+        report_language = language or self.settings.report_language
+        logger.info("● Generating a fresh account synthesis · language=%s", report_language)
+        synthesis, aggregates = await synthesize_account(
+            self.llm,
+            data.account,
+            data.accountInsights,
+            findings,
+            report_language,
+        )
+        if self.db.get_job(order_id) is None:
+            raise LookupError(f"No local job found for order {order_id}")
+        self.db.update_job(order_id, synthesis_json=synthesis.model_dump_json())
+
+        destination = output_path or self.settings.report_directory / f"{order_id}-reanalyzed.pdf"
         build_report(
             destination,
             self.settings.report_brand_name,
-            language or self.settings.report_language,
+            report_language,
             data.account,
             synthesis,
             findings,
             aggregates,
         )
-        logger.info("✓ Local PDF rebuilt · %s", destination.resolve())
+        logger.info(
+            "✓ Fresh local analysis and PDF completed · order=%s · %s",
+            order_id,
+            destination.resolve(),
+        )
         return destination
 
     async def process_claim(self, claim) -> None:

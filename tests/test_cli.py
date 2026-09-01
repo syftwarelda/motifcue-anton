@@ -34,3 +34,13 @@ def test_regenerate_and_export_arguments() -> None:
     assert export.command == "export"
     assert export.order_id == "order-123"
     assert export.prod is True
+
+
+def test_reanalyze_can_refresh_images() -> None:
+    args = build_parser().parse_args(
+        ["reanalyze", "order-123", "--refresh-images", "--language", "es"]
+    )
+    assert args.command == "reanalyze"
+    assert args.order_id == "order-123"
+    assert args.refresh_images is True
+    assert args.language == "es"

@@ -34,6 +34,8 @@ anton --help
 | Ver trabajos locales | `anton status` |
 | Seguir los logs | `anton logs` |
 | Regenerar un PDF localmente | `anton regenerate ORDER_ID` |
+| Repetir el análisis estratégico | `anton reanalyze ORDER_ID` |
+| Repetir también el análisis visual | `anton reanalyze ORDER_ID --refresh-images` |
 | Exportar los datos locales | `anton export ORDER_ID` |
 
 ## Opciones globales
@@ -41,8 +43,9 @@ anton --help
 | Opción | Uso |
 |---|---|
 | `--prod` | Lee la configuración de `.env.prod` en vez de `.env`. |
-| `--output RUTA` | Define la ruta del archivo generado por `regenerate` o `export`. |
-| `--language en\|es` | Cambia el idioma del PDF regenerado. |
+| `--output RUTA` | Define la ruta del archivo generado por `regenerate`, `reanalyze` o `export`. |
+| `--language en\|es` | Cambia el idioma del PDF regenerado o reanalizado. |
+| `--refresh-images` | Con `reanalyze`, vuelve a descargar y analizar los thumbnails. |
 | `--lines N` | Define cuántas líneas iniciales muestra `anton logs`. |
 | `--no-follow` | Muestra los logs existentes y termina. |
 | `-h`, `--help` | Muestra la ayuda integrada. |
@@ -199,6 +202,52 @@ El comando utiliza:
 > Si la orden se procesó cuando `CLEANUP_MEDIA_AFTER_SUCCESS=true`, el reporte puede regenerarse
 > con los análisis guardados, pero algunas imágenes o thumbnails podrían no estar disponibles.
 
+## `anton reanalyze`
+
+Genera una síntesis estratégica nueva con el modelo local y luego crea un PDF nuevo.
+
+```bash
+anton reanalyze ORDER_ID
+```
+
+Salida predeterminada:
+
+```text
+reports/ORDER_ID-reanalyzed.pdf
+```
+
+Sin opciones adicionales, utiliza el snapshot y los análisis visuales guardados, pero vuelve a
+ejecutar el modelo de texto para descubrir patrones, recomendaciones y el plan de 30 días.
+
+Para volver a descargar los thumbnails y repetir también el análisis visual de cada publicación:
+
+```bash
+anton reanalyze ORDER_ID --refresh-images
+```
+
+También acepta idioma y ruta personalizados:
+
+```bash
+anton reanalyze ORDER_ID --refresh-images --language es
+anton reanalyze ORDER_ID --output reports/revision-ai.pdf
+anton reanalyze ORDER_ID --prod
+```
+
+| Comando | Imágenes | Análisis visual | Síntesis estratégica | PDF |
+|---|---|---|---|---|
+| `regenerate` | Usa las locales | Usa la guardada | Usa la guardada | Nuevo |
+| `reanalyze` | Usa las locales | Usa la guardada | Nueva | Nuevo |
+| `reanalyze --refresh-images` | Vuelve a descargarlas | Nuevo cuando hay imagen | Nueva | Nuevo |
+
+> [!success] No altera la orden remota
+> `reanalyze` no reclama órdenes, no llama al backend de MotifCue y no cambia el estado remoto.
+> Solo actualiza la síntesis y, si corresponde, los análisis visuales de la base local de Anton.
+
+> [!warning] URLs temporales
+> Las URLs multimedia de Instagram pueden caducar. Si una descarga falla, Anton conserva la
+> imagen local y el análisis visual anterior. El reporte puede completarse con esa evidencia
+> guardada, y el log identifica qué contenidos no pudieron refrescarse.
+
 ## `anton export`
 
 Exporta a JSON toda la información que Anton conserva localmente para una orden.
@@ -273,7 +322,8 @@ Los reportes se guardan normalmente en:
 ```text
 reports/
 ├── ORDER_ID.pdf
-└── ORDER_ID-local.pdf
+├── ORDER_ID-local.pdf
+└── ORDER_ID-reanalyzed.pdf
 ```
 
 ## Configuración de desarrollo y producción
@@ -310,7 +360,7 @@ Comprueba que estás usando el entorno correcto. Si la orden fue procesada con `
 
 ### No existe el snapshot local
 
-`regenerate` y `export` necesitan:
+`regenerate`, `reanalyze` y `export` necesitan:
 
 ```text
 data/orders/ORDER_ID/instagram-snapshot.json
@@ -361,4 +411,3 @@ git pull origin staging
 ## Notas relacionadas
 
 - [[README|MotifCue Anton]]
-

@@ -18,11 +18,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="anton", description="MotifCue local analysis worker")
     parser.add_argument(
         "command",
-        choices=("run", "once", "status", "logs", "regenerate", "export"),
+        choices=("run", "once", "status", "logs", "regenerate", "reanalyze", "export"),
         nargs="?",
         default="run",
     )
-    parser.add_argument("order_id", nargs="?", help="Order ID for regenerate or export")
+    parser.add_argument("order_id", nargs="?", help="Order ID for local order commands")
     parser.add_argument(
         "--prod",
         action="store_true",
@@ -36,7 +36,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--language",
         choices=("en", "es"),
-        help="Report language override for 'anton regenerate'",
+        help="Report language override for regenerate or reanalyze",
+    )
+    parser.add_argument(
+        "--refresh-images",
+        action="store_true",
+        help="Re-download saved media URLs and rerun local visual analysis",
     )
     return parser
 
@@ -72,6 +77,24 @@ async def _regenerate(
         await worker.close()
 
 
+async def _reanalyze(
+    worker: Worker,
+    order_id: str,
+    output: Path | None,
+    language: str | None,
+    refresh_images: bool,
+) -> Path:
+    try:
+        return await worker.pipeline.reanalyze_local(
+            order_id,
+            output,
+            language,
+            refresh_images=refresh_images,
+        )
+    finally:
+        await worker.close()
+
+
 def _show_logs(path: Path, lines: int, follow: bool) -> None:
     if not path.exists():
         print(f"No log file yet: {path}")
@@ -97,8 +120,10 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
 
-    if args.command in {"regenerate", "export"} and not args.order_id:
+    if args.command in {"regenerate", "reanalyze", "export"} and not args.order_id:
         parser.error(f"anton {args.command} requires an order ID")
+    if args.refresh_images and args.command != "reanalyze":
+        parser.error("--refresh-images can only be used with 'anton reanalyze'")
 
     settings = get_settings(".env.prod" if args.prod else ".env")
     if args.command == "logs":
@@ -122,6 +147,17 @@ def main() -> None:
     if args.command == "regenerate":
         regenerated = asyncio.run(_regenerate(worker, args.order_id, args.output, args.language))
         print(regenerated.resolve())
+    elif args.command == "reanalyze":
+        reanalyzed = asyncio.run(
+            _reanalyze(
+                worker,
+                args.order_id,
+                args.output,
+                args.language,
+                args.refresh_images,
+            )
+        )
+        print(reanalyzed.resolve())
     elif args.command == "once":
         if asyncio.run(_once(worker)) is None:
             raise SystemExit(1)
