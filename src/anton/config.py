@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     report_directory: Path = Path("./reports")
     database_url: str = "sqlite:///./data/anton.db"
     log_level: str = "INFO"
+    log_directory: Path = Path("./logs")
+    log_to_file: bool = True
 
     llm_base_url: AnyHttpUrl = "http://127.0.0.1:11434/v1"
     llm_api_key: SecretStr = SecretStr("ollama")
@@ -52,6 +54,8 @@ class Settings(BaseSettings):
     def prepare_directories(self) -> None:
         self.data_directory.mkdir(parents=True, exist_ok=True)
         self.report_directory.mkdir(parents=True, exist_ok=True)
+        if self.log_to_file:
+            self.log_directory.mkdir(parents=True, exist_ok=True)
 
 
 @lru_cache

@@ -60,20 +60,35 @@ class Worker:
         try:
             claim = await self.backend.claim()
         except NoWorkAvailable:
-            logger.info("no_work_available")
+            logger.info("○ No orders are waiting")
             return False
+        except Exception:
+            logger.exception("✗ Could not claim an order from MotifCue")
+            raise
         try:
             await self.pipeline.process_claim(claim)
         except Exception:
             # Do not fail a paid order when Anton or local infrastructure is temporarily down.
             # The active backend order remains resumable; checkpoints avoid duplicate work.
-            logger.exception("job_interrupted order_id=%s", claim.order.id)
+            logger.exception("✗ Report pipeline interrupted · order=%s", claim.order.id)
             self.db.update_job(claim.order.id, last_error="LOCAL_PIPELINE_ERROR")
             raise
         return True
 
     async def run_forever(self) -> None:
-        logger.info("worker_started")
+        logger.info("Anton is online")
+        logger.info(
+            "Configuration · poll=%.0fs · media=%d · concurrency=%d · storage=%s",
+            self.settings.poll_interval_seconds,
+            self.settings.max_media_items,
+            self.settings.media_analysis_concurrency,
+            self.settings.report_storage_driver,
+        )
+        logger.info(
+            "Models · text=%s · vision=%s",
+            self.settings.llm_text_model,
+            self.settings.llm_vision_model,
+        )
         try:
             while True:
                 try:

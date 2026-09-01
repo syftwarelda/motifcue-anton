@@ -40,6 +40,7 @@ class ContentAnalyzer:
 
     async def analyze_one(self, order_id: str, item: MediaItem) -> PostFinding:
         async with self.semaphore:
+            logger.debug("→ Preparing media %s · type=%s", item.id, item.media_type)
             image_path: Path | None = None
             try:
                 image_path = await self.media.representative_image(order_id, item)
@@ -49,8 +50,12 @@ class ContentAnalyzer:
             fingerprint = self.media.fingerprint(item, image_path)
             cached = self.db.get_media_result(order_id, item.id, fingerprint)
             if cached:
+                logger.debug("  Using cached visual analysis · media=%s", item.id)
                 visual = VisualAnalysis.model_validate_json(cached)
             elif image_path:
+                logger.debug(
+                    "  Sending representative image to local vision model · media=%s", item.id
+                )
                 visual = await self.llm.analyze_image(
                     image_path,
                     VISUAL_SYSTEM_PROMPT,
@@ -59,6 +64,7 @@ class ContentAnalyzer:
                 )
                 self.db.save_media_result(order_id, item.id, fingerprint, visual.model_dump_json())
             else:
+                logger.debug("  Falling back to metadata-only analysis · media=%s", item.id)
                 visual = self._text_only_analysis(item)
                 self.db.save_media_result(order_id, item.id, fingerprint, visual.model_dump_json())
 
@@ -75,16 +81,18 @@ class ContentAnalyzer:
             )
 
     async def analyze_all(self, order_id: str, items: list[MediaItem]) -> list[PostFinding]:
+        logger.info("● Analyzing media with the local vision model · total=%d", len(items))
         tasks = [asyncio.create_task(self.analyze_one(order_id, item)) for item in items]
         results: list[PostFinding] = []
         for completed in asyncio.as_completed(tasks):
             results.append(await completed)
             logger.info(
-                "media_analyzed order_id=%s completed=%d total=%d",
-                order_id,
+                "  Visual analysis %d/%d · %d%%",
                 len(results),
                 len(items),
+                round((len(results) / len(items)) * 100) if items else 100,
             )
+        logger.info("✓ Visual analysis completed · total=%d", len(results))
         return sorted(results, key=lambda finding: finding.timestamp, reverse=True)
 
 

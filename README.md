@@ -74,6 +74,23 @@ Check local state without exposing customer data:
 anton status
 ```
 
+Follow Anton's operational log in another terminal:
+
+```bash
+anton logs
+```
+
+`anton logs` starts with the latest 100 lines and continues following the file. Use
+`anton logs --lines 250`, `anton logs --no-follow`, or `anton logs --prod` when needed.
+The same events are shown in a colored console while Anton runs and written to
+`logs/anton.log`. Files rotate automatically at 5 MB, keeping the five previous files.
+
+`LOG_LEVEL=INFO` shows the useful production flow: claiming, validation, collection,
+visual-analysis progress, synthesis, PDF creation, and completion. Temporarily use
+`LOG_LEVEL=DEBUG` to include backend timings, cache decisions, individual media IDs,
+and local-model request timings. Tokens, authorization headers, captions, prompts,
+media URLs, and customer email addresses are never logged.
+
 ## Report storage
 
 `REPORT_STORAGE_DRIVER=local_only` is the default. It writes `reports/<order-id>.pdf`,

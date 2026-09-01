@@ -6,6 +6,7 @@ import json
 import logging
 import re
 from pathlib import Path
+from time import perf_counter
 from typing import TypeVar
 
 import httpx
@@ -54,7 +55,9 @@ class LlamaClient:
     async def _structured_completion(self, model: str, messages: list[dict], schema: type[T]) -> T:
         error: Exception | None = None
         for attempt in range(self.max_retries + 1):
+            started = perf_counter()
             try:
+                logger.debug("→ Local AI request · model=%s · attempt=%d", model, attempt + 1)
                 response = await self.client.post(
                     "/chat/completions",
                     json={
@@ -66,7 +69,13 @@ class LlamaClient:
                 )
                 response.raise_for_status()
                 content = response.json()["choices"][0]["message"]["content"]
-                return schema.model_validate(self._extract_json(content))
+                result = schema.model_validate(self._extract_json(content))
+                logger.debug(
+                    "← Local AI response · model=%s · %.1f s",
+                    model,
+                    perf_counter() - started,
+                )
+                return result
             except (
                 httpx.HTTPError,
                 KeyError,
@@ -79,6 +88,11 @@ class LlamaClient:
                     raise RuntimeError(
                         "The local model did not return valid structured data"
                     ) from exc
+                logger.warning(
+                    "Local AI response failed validation; retrying · model=%s · attempt=%d",
+                    model,
+                    attempt + 1,
+                )
                 await asyncio.sleep(2**attempt)
         raise RuntimeError("Unreachable") from error
 

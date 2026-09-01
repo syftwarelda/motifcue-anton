@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from time import perf_counter
 from typing import Any
 
 import httpx
@@ -46,8 +47,18 @@ class BackendClient:
     async def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
         last_error: Exception | None = None
         for attempt in range(3):
+            started = perf_counter()
             try:
+                logger.debug("→ Backend %s %s (attempt %d/3)", method, path, attempt + 1)
                 response = await self.client.request(method, path, **kwargs)
+                elapsed_ms = round((perf_counter() - started) * 1000)
+                logger.debug(
+                    "← Backend %s %s · %d · %d ms",
+                    method,
+                    path,
+                    response.status_code,
+                    elapsed_ms,
+                )
                 if response.status_code >= 500:
                     response.raise_for_status()
                 return response
@@ -59,13 +70,22 @@ class BackendClient:
         raise RuntimeError("Unreachable") from last_error
 
     async def claim(self) -> ClaimResponse:
+        logger.info("◇ Looking for the oldest order ready to process")
         response = await self._request("POST", "/api/internal/orders/claim")
         if response.status_code == 204:
             raise NoWorkAvailable
         response.raise_for_status()
-        return ClaimResponse.model_validate(response.json())
+        claim = ClaimResponse.model_validate(response.json())
+        logger.info(
+            "◆ Claimed order %s · status=%s · resumed=%s",
+            claim.order.id,
+            claim.order.status,
+            claim.resumed,
+        )
+        return claim
 
     async def validate_instagram(self, order_id: str) -> None:
+        logger.info("● Checking Instagram connection · order=%s", order_id)
         response = await self._request("POST", f"/api/internal/orders/{order_id}/validation")
         if response.status_code == 422:
             raise InstagramReconnectRequired
@@ -74,6 +94,7 @@ class BackendClient:
             if status.get("order", {}).get("status") == "GENERATING_REPORT":
                 return
         response.raise_for_status()
+        logger.info("✓ Instagram connection is valid · order=%s", order_id)
 
     async def instagram_page(
         self, order_id: str, limit: int, cursor: str | None = None
@@ -90,6 +111,7 @@ class BackendClient:
     async def collect_instagram_data(
         self, order_id: str, page_size: int, max_items: int
     ) -> InstagramDataPage:
+        logger.info("● Collecting authorized Instagram data · limit=%d", max_items)
         cursor: str | None = None
         first: InstagramDataPage | None = None
         all_media = []
@@ -98,6 +120,7 @@ class BackendClient:
             if first is None:
                 first = page
             all_media.extend(page.media[: max_items - len(all_media)])
+            logger.info("  Collected %d media items", len(all_media))
             if not page.paging.hasNextPage or not page.paging.nextCursor:
                 break
             cursor = page.paging.nextCursor
@@ -106,9 +129,11 @@ class BackendClient:
         first.media = all_media
         first.paging.nextCursor = cursor
         first.paging.hasNextPage = len(all_media) >= max_items
+        logger.info("✓ Instagram data collected · media=%d", len(all_media))
         return first
 
     async def report_generated(self, order_id: str, report_url: str | None) -> None:
+        logger.info("● Notifying MotifCue that the report is ready · order=%s", order_id)
         payload = {"reportUrl": report_url} if report_url else {"storageMode": "LOCAL"}
         response = await self._request(
             "POST",
@@ -116,6 +141,7 @@ class BackendClient:
             json=payload,
         )
         response.raise_for_status()
+        logger.info("✓ MotifCue accepted the completed report · order=%s", order_id)
 
     async def failed(self, order_id: str, error_code: str) -> None:
         response = await self._request(

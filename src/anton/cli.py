@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import time
+from collections import deque
 from contextlib import suppress
+from pathlib import Path
 
 from anton.config import get_settings
 from anton.db import Database
@@ -12,11 +15,17 @@ from anton.worker import Worker
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="anton", description="MotifCue local analysis worker")
-    parser.add_argument("command", choices=("run", "once", "status"), nargs="?", default="run")
+    parser.add_argument(
+        "command", choices=("run", "once", "status", "logs"), nargs="?", default="run"
+    )
     parser.add_argument(
         "--prod",
         action="store_true",
         help="Load production configuration from .env.prod instead of .env",
+    )
+    parser.add_argument("--lines", type=int, default=100, help="Lines shown by 'anton logs'")
+    parser.add_argument(
+        "--no-follow", action="store_true", help="Print existing logs without following them"
     )
     return parser
 
@@ -34,18 +43,45 @@ def _status(db: Database) -> None:
         )
 
 
-async def _once(worker: Worker) -> None:
+async def _once(worker: Worker) -> bool | None:
     try:
-        await worker.once()
+        return await worker.once()
+    except Exception:
+        return None
     finally:
         await worker.close()
+
+
+def _show_logs(path: Path, lines: int, follow: bool) -> None:
+    if not path.exists():
+        print(f"No log file yet: {path}")
+        return
+
+    with path.open(encoding="utf-8") as source:
+        for line in deque(source, maxlen=max(1, lines)):
+            print(line, end="")
+        if not follow:
+            return
+        try:
+            while True:
+                line = source.readline()
+                if line:
+                    print(line, end="", flush=True)
+                else:
+                    time.sleep(0.25)
+        except KeyboardInterrupt:
+            return
 
 
 def main() -> None:
     args = build_parser().parse_args()
 
     settings = get_settings(".env.prod" if args.prod else ".env")
-    configure_logging(settings.log_level)
+    if args.command == "logs":
+        _show_logs(settings.log_directory / "anton.log", args.lines, not args.no_follow)
+        return
+
+    configure_logging(settings.log_level, settings.log_directory, settings.log_to_file)
     db = Database(settings.database_url)
     db.create_schema()
 
@@ -55,7 +91,8 @@ def main() -> None:
 
     worker = Worker(settings, db)
     if args.command == "once":
-        asyncio.run(_once(worker))
+        if asyncio.run(_once(worker)) is None:
+            raise SystemExit(1)
     else:
         with suppress(KeyboardInterrupt):
             asyncio.run(worker.run_forever())
