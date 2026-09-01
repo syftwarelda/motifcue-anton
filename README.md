@@ -1,5 +1,7 @@
 # MotifCue Anton
 
+> Obsidian command reference: [Anton - Command Reference](docs/Anton%20-%20Command%20Reference.md)
+
 Anton is the private local worker that turns an authorized Instagram account into a useful creator report. It does not receive or decrypt Instagram tokens. MotifCue's backend keeps the token, calls Instagram, and exposes only the order data Anton needs through the private internal API.
 
 ## What it does
