@@ -66,7 +66,11 @@ anton status
 
 ## Report storage
 
-`REPORT_STORAGE_DRIVER=local` writes `reports/<order-id>.pdf`. Set `REPORT_PUBLIC_BASE_URL` to the HTTPS base URL that serves this directory. This is convenient when a reverse proxy or storage mount already exposes the folder.
+`REPORT_STORAGE_DRIVER=local_only` is the default. It writes `reports/<order-id>.pdf`,
+does not upload it anywhere, and moves the order to `AWAITING_REVIEW` without a report URL.
+
+`REPORT_STORAGE_DRIVER=local` also writes the PDF locally, but expects
+`REPORT_PUBLIC_BASE_URL` to be an HTTPS location that already serves that directory.
 
 For S3-compatible storage, set `REPORT_STORAGE_DRIVER=s3` and fill the `S3_*` variables. The uploaded object is private unless your bucket or CDN policy exposes the configured public URL.
 

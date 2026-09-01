@@ -16,7 +16,10 @@ class ReportStorage:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
-    def publish(self, order_id: str, report_path: Path) -> str:
+    def publish(self, order_id: str, report_path: Path) -> str | None:
+        if self.settings.report_storage_driver == "local_only":
+            return None
+
         if self.settings.report_storage_driver == "local":
             base = (self.settings.report_public_base_url or "").rstrip("/")
             if not base.startswith("https://"):

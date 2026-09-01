@@ -33,7 +33,7 @@ class Settings(BaseSettings):
 
     report_language: Literal["en", "es"] = "en"
     report_brand_name: str = "MotifCue"
-    report_storage_driver: Literal["local", "s3"] = "local"
+    report_storage_driver: Literal["local_only", "local", "s3"] = "local_only"
     report_public_base_url: str | None = None
 
     s3_bucket: str | None = None

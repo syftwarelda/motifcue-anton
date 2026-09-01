@@ -99,11 +99,12 @@ class BackendClient:
         first.paging.hasNextPage = len(all_media) >= max_items
         return first
 
-    async def report_generated(self, order_id: str, report_url: str) -> None:
+    async def report_generated(self, order_id: str, report_url: str | None) -> None:
+        payload = {"reportUrl": report_url} if report_url else {"storageMode": "LOCAL"}
         response = await self._request(
             "POST",
             f"/api/internal/orders/{order_id}/report-generated",
-            json={"reportUrl": report_url},
+            json=payload,
         )
         response.raise_for_status()
 
