@@ -55,6 +55,19 @@ def account_metrics(findings: Iterable[PostFinding]) -> dict:
         found = values(metric)
         return round(median(found), 2) if found else None
 
+    def total(metric: str) -> float | None:
+        found = values(metric)
+        return round(sum(found), 2) if found else None
+
+    def median_rate(rate: str, selected: list[PostFinding] | None = None) -> float | None:
+        source = selected if selected is not None else posts
+        found = [
+            float(post.rates[rate])
+            for post in source
+            if isinstance(post.rates.get(rate), (int, float))
+        ]
+        return round(median(found), 2) if found else None
+
     ranked = sorted(
         posts,
         key=lambda post: (
@@ -63,14 +76,46 @@ def account_metrics(findings: Iterable[PostFinding]) -> dict:
         ),
         reverse=True,
     )
+    format_metrics = {}
+    for media_type, count in sorted(by_type.items(), key=lambda item: (-item[1], item[0])):
+        selected = [post for post in posts if post.media_type == media_type]
+
+        def selected_median(metric: str, selected: list[PostFinding] = selected) -> float | None:
+            found = [
+                float(post.metrics[metric])
+                for post in selected
+                if isinstance(post.metrics.get(metric), (int, float))
+            ]
+            return round(median(found), 2) if found else None
+
+        format_metrics[media_type] = {
+            "count": count,
+            "median_reach": selected_median("reach"),
+            "median_views": selected_median("views"),
+            "median_interactions": selected_median("total_interactions"),
+            "median_interaction_rate": median_rate("interaction_rate_by_reach", selected),
+        }
+
+    dated = sorted(post.timestamp for post in posts)
     return {
         "analyzed_posts": len(posts),
         "formats": dict(by_type),
+        "format_metrics": format_metrics,
+        "total_reach": total("reach"),
+        "total_views": total("views"),
+        "total_interactions": total("total_interactions"),
+        "total_saves": total("saved"),
+        "total_shares": total("shares"),
         "median_reach": med("reach"),
         "median_views": med("views"),
         "median_interactions": med("total_interactions"),
+        "median_interaction_rate": median_rate("interaction_rate_by_reach"),
+        "median_save_rate": median_rate("save_rate_by_reach"),
+        "median_share_rate": median_rate("share_rate_by_reach"),
         "top_media_ids": [post.media_id for post in ranked[:5]],
         "posts_with_reach": len(values("reach")),
         "posts_with_saves": len(values("saved")),
         "posts_with_shares": len(values("shares")),
+        "date_from": dated[0].isoformat() if dated else None,
+        "date_to": dated[-1].isoformat() if dated else None,
     }
