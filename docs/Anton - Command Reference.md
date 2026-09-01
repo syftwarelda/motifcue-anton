@@ -37,6 +37,8 @@ anton --help
 | Repetir el análisis estratégico | `anton reanalyze ORDER_ID` |
 | Repetir también el análisis visual | `anton reanalyze ORDER_ID --refresh-images` |
 | Exportar los datos locales | `anton export ORDER_ID` |
+| Actualizar el knowledge local | `anton knowledge sync` |
+| Buscar en el knowledge | `anton knowledge search "CONSULTA"` |
 
 ## Opciones globales
 
@@ -48,6 +50,7 @@ anton --help
 | `--refresh-images` | Con `reanalyze`, vuelve a descargar y analizar los thumbnails. |
 | `--lines N` | Define cuántas líneas iniciales muestra `anton logs`. |
 | `--no-follow` | Muestra los logs existentes y termina. |
+| `--limit N` | Limita los resultados de `knowledge search` entre 1 y 20. |
 | `-h`, `--help` | Muestra la ayuda integrada. |
 
 > [!tip] Posición de los flags
@@ -290,6 +293,55 @@ El archivo incluye:
 > [!note] Órdenes antiguas
 > Las órdenes recopiladas antes de añadir el archivo de respuestas paginadas tendrán el snapshot
 > consolidado, pero posiblemente no cada respuesta HTTP individual.
+
+## `anton knowledge`
+
+Gestiona la biblioteca RAG local que Anton consulta durante la síntesis estratégica.
+
+Antes del primer uso, instala el modelo local de embeddings:
+
+```bash
+ollama pull nomic-embed-text
+```
+
+Descargar las fuentes oficiales y crear sus embeddings:
+
+```bash
+anton knowledge sync
+```
+
+Ver fuentes activas, cambios pendientes y errores de actualización:
+
+```bash
+anton knowledge status
+```
+
+Probar la recuperación semántica:
+
+```bash
+anton knowledge search "cómo mejorar la claridad visual de un Reel"
+anton knowledge search "branded content disclosure" --limit 3
+```
+
+Cuando una fuente activa cambia, Anton guarda la revisión nueva como pendiente y continúa usando
+la versión aprobada anterior. Inspecciona la diferencia y después aprueba el cambio:
+
+```bash
+anton knowledge diff SOURCE_ID
+anton knowledge approve SOURCE_ID
+```
+
+> [!success] RAG local
+> Los documentos, fragmentos y embeddings se guardan en SQLite. Las consultas de embeddings se
+> ejecutan contra el Ollama local configurado; no se envían documentos a un proveedor externo.
+
+> [!important] Jerarquía de evidencia
+> El knowledge ofrece contexto y posibles experimentos. Nunca sustituye las métricas ni los
+> patrones observados en la cuenta analizada. Anton también conserva el contexto `organic`,
+> `paid` o `policy` para evitar aplicar recomendaciones publicitarias como reglas orgánicas.
+
+Consulta [[Anton - Knowledge RAG]] para ver la arquitectura, las fuentes iniciales y el proceso de
+aprobación completo.
 
 ## Conservación de datos
 

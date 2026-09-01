@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import difflib
 import time
 from collections import deque
 from contextlib import suppress
@@ -9,6 +10,8 @@ from pathlib import Path
 
 from anton.config import get_settings
 from anton.db import Database
+from anton.knowledge import KnowledgeService
+from anton.llm import LlamaClient
 from anton.local_data import export_order_data
 from anton.logging_setup import configure_logging
 from anton.worker import Worker
@@ -18,11 +21,25 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="anton", description="MotifCue local analysis worker")
     parser.add_argument(
         "command",
-        choices=("run", "once", "status", "logs", "regenerate", "reanalyze", "export"),
+        choices=(
+            "run",
+            "once",
+            "status",
+            "logs",
+            "regenerate",
+            "reanalyze",
+            "export",
+            "knowledge",
+        ),
         nargs="?",
         default="run",
     )
     parser.add_argument("order_id", nargs="?", help="Order ID for local order commands")
+    parser.add_argument(
+        "knowledge_args",
+        nargs="*",
+        help="Action and value for 'anton knowledge' commands",
+    )
     parser.add_argument(
         "--prod",
         action="store_true",
@@ -43,6 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Re-download saved media URLs and rerun local visual analysis",
     )
+    parser.add_argument("--limit", type=int, default=6, help="Maximum knowledge search results")
     return parser
 
 
@@ -116,6 +134,75 @@ def _show_logs(path: Path, lines: int, follow: bool) -> None:
             return
 
 
+def _print_knowledge_results(results) -> None:
+    if not results:
+        print("No approved knowledge matched the query.")
+        return
+    for index, result in enumerate(results, start=1):
+        excerpt = result.content.replace("\n", " ")[:300]
+        print(f"{index}. {result.title} [{result.context}] · score={result.score:g}")
+        print(f"   {result.url}")
+        print(f"   {excerpt}")
+
+
+def _knowledge(service: KnowledgeService, action: str, values: list[str]) -> None:
+    service.register_catalog()
+    if action == "status":
+        rows = service.status_rows()
+        print(f"{'SOURCE':<42} {'ACTIVE':<8} {'PENDING':<9} STATUS")
+        for row in rows:
+            status = row["error"] or ("OK" if row["active"] else "NOT_SYNCED")
+            print(f"{row['id']:<42} {str(row['active']):<8} {str(row['pending']):<9} {status}")
+        return
+    if action == "approve":
+        service.approve(values[0])
+        print(f"Approved latest pending revision: {values[0]}")
+        return
+    if action == "diff":
+        active, pending = service.db.knowledge_review_pair(values[0])
+        if pending is None:
+            print(f"No pending revision: {values[0]}")
+            return
+        before = active.content.splitlines() if active else []
+        after = pending.content.splitlines()
+        difference = difflib.unified_diff(
+            before,
+            after,
+            fromfile=f"{values[0]}:active",
+            tofile=f"{values[0]}:pending",
+            lineterm="",
+        )
+        print("\n".join(difference))
+        return
+    raise ValueError(f"Unsupported knowledge action: {action}")
+
+
+def _llm(settings) -> LlamaClient:
+    return LlamaClient(
+        str(settings.llm_base_url),
+        settings.llm_api_key.get_secret_value(),
+        settings.llm_text_model,
+        settings.llm_vision_model,
+        settings.llm_embedding_model,
+        settings.llm_timeout_seconds,
+        settings.llm_max_retries,
+    )
+
+
+async def _sync_knowledge(service: KnowledgeService, llm: LlamaClient) -> dict[str, int]:
+    try:
+        return await service.sync()
+    finally:
+        await llm.close()
+
+
+async def _search_knowledge(service: KnowledgeService, llm: LlamaClient, query: str, limit: int):
+    try:
+        return await service.semantic_search(query, limit)
+    finally:
+        await llm.close()
+
+
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
@@ -124,6 +211,20 @@ def main() -> None:
         parser.error(f"anton {args.command} requires an order ID")
     if args.refresh_images and args.command != "reanalyze":
         parser.error("--refresh-images can only be used with 'anton reanalyze'")
+    if args.command != "knowledge" and args.knowledge_args:
+        parser.error("unexpected additional arguments")
+    if args.command == "knowledge":
+        action = args.order_id
+        if action not in {"sync", "status", "search", "diff", "approve"}:
+            parser.error("anton knowledge requires: sync, status, search, diff, or approve")
+        if action in {"search", "diff", "approve"} and not args.knowledge_args:
+            parser.error(f"anton knowledge {action} requires a value")
+        if action in {"sync", "status"} and args.knowledge_args:
+            parser.error(f"anton knowledge {action} accepts no additional value")
+        if action in {"diff", "approve"} and len(args.knowledge_args) != 1:
+            parser.error(f"anton knowledge {action} requires exactly one source ID")
+    if args.limit < 1 or args.limit > 20:
+        parser.error("--limit must be between 1 and 20")
 
     settings = get_settings(".env.prod" if args.prod else ".env")
     if args.command == "logs":
@@ -136,6 +237,33 @@ def main() -> None:
 
     if args.command == "status":
         _status(db)
+        return
+
+    if args.command == "knowledge":
+        if args.order_id in {"sync", "search"}:
+            llm = _llm(settings)
+            service = KnowledgeService(db, settings.request_timeout_seconds, embedder=llm)
+        else:
+            llm = None
+            service = KnowledgeService(db, settings.request_timeout_seconds)
+        if args.order_id == "sync":
+            summary = asyncio.run(_sync_knowledge(service, llm))
+            print(
+                "Knowledge sync completed · "
+                + " · ".join(f"{key}={value}" for key, value in summary.items())
+            )
+        elif args.order_id == "search":
+            results = asyncio.run(
+                _search_knowledge(
+                    service,
+                    llm,
+                    " ".join(args.knowledge_args),
+                    args.limit,
+                )
+            )
+            _print_knowledge_results(results)
+        else:
+            _knowledge(service, args.order_id, args.knowledge_args)
         return
 
     if args.command == "export":

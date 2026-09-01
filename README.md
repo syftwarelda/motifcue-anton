@@ -1,6 +1,8 @@
 # MotifCue Anton
 
 > Obsidian command reference: [Anton - Command Reference](docs/Anton%20-%20Command%20Reference.md)
+>
+> Knowledge system: [Anton - Knowledge RAG](docs/Anton%20-%20Knowledge%20RAG.md)
 
 Anton is the private local worker that turns an authorized Instagram account into a useful creator report. It does not receive or decrypt Instagram tokens. MotifCue's backend keeps the token, calls Instagram, and exposes only the order data Anton needs through the private internal API.
 
@@ -36,6 +38,7 @@ Fill `.env`, then make sure the local models are available. With Ollama, for exa
 ```bash
 ollama pull llama3.2
 ollama pull llama3.2-vision:11b
+ollama pull nomic-embed-text
 ```
 
 If the staging deployment uses Vercel Deployment Protection, create a Protection Bypass for
@@ -147,6 +150,38 @@ one.
 Keep `CLEANUP_MEDIA_AFTER_SUCCESS=false` to preserve thumbnails for offline regeneration. Setting
 it to `true` removes only downloaded media after success; the snapshot, database and analyses are
 still retained.
+
+## Local knowledge RAG
+
+Anton can maintain an approved, versioned knowledge library and retrieve relevant excerpts during
+account synthesis. The source content, chunks and embeddings remain in Anton's local SQLite
+database. Embeddings are generated locally through Ollama with `nomic-embed-text` by default.
+
+Download or update the official source catalog and build the semantic index:
+
+```bash
+anton knowledge sync
+```
+
+Inspect the library and test retrieval:
+
+```bash
+anton knowledge status
+anton knowledge search "Reels opening frame and retention"
+```
+
+The first revision of each built-in official source becomes active. If its content later changes,
+the new revision remains pending and the previous approved revision stays active. Review the
+change, then approve it explicitly:
+
+```bash
+anton knowledge diff SOURCE_ID
+anton knowledge approve SOURCE_ID
+```
+
+Only active approved revisions are available to report generation. If Ollama or the embedding
+model is unavailable, synchronization still stores the source and Anton falls back to lexical
+retrieval instead of blocking report generation.
 
 ## Report storage
 

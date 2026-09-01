@@ -23,11 +23,13 @@ class LlamaClient:
         api_key: str,
         text_model: str,
         vision_model: str,
+        embedding_model: str,
         timeout: float,
         max_retries: int,
     ) -> None:
         self.text_model = text_model
         self.vision_model = vision_model
+        self.embedding_model = embedding_model
         self.max_retries = max_retries
         self.client = httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
@@ -122,3 +124,18 @@ class LlamaClient:
             {"role": "user", "content": user_prompt},
         ]
         return await self._structured_completion(self.text_model, messages, schema)
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        """Create local embeddings through the OpenAI-compatible Ollama endpoint."""
+        if not texts:
+            return []
+        response = await self.client.post(
+            "/embeddings",
+            json={"model": self.embedding_model, "input": texts},
+        )
+        response.raise_for_status()
+        rows = sorted(response.json()["data"], key=lambda row: row["index"])
+        embeddings = [row["embedding"] for row in rows]
+        if len(embeddings) != len(texts):
+            raise RuntimeError("Embedding endpoint returned an unexpected number of vectors")
+        return embeddings

@@ -44,3 +44,17 @@ def test_reanalyze_can_refresh_images() -> None:
     assert args.order_id == "order-123"
     assert args.refresh_images is True
     assert args.language == "es"
+
+
+def test_knowledge_commands() -> None:
+    sync = build_parser().parse_args(["knowledge", "sync", "--prod"])
+    assert sync.command == "knowledge"
+    assert sync.order_id == "sync"
+    assert sync.prod is True
+
+    search = build_parser().parse_args(
+        ["knowledge", "search", "reels", "retention", "--limit", "4"]
+    )
+    assert search.order_id == "search"
+    assert search.knowledge_args == ["reels", "retention"]
+    assert search.limit == 4

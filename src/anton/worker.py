@@ -34,6 +34,7 @@ class Worker:
             settings.llm_api_key.get_secret_value(),
             settings.llm_text_model,
             settings.llm_vision_model,
+            settings.llm_embedding_model,
             settings.llm_timeout_seconds,
             settings.llm_max_retries,
         )

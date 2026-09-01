@@ -31,8 +31,10 @@ class Settings(BaseSettings):
     llm_api_key: SecretStr = SecretStr("ollama")
     llm_text_model: str = "llama3.2:latest"
     llm_vision_model: str = "llama3.2-vision:11b"
+    llm_embedding_model: str = "nomic-embed-text"
     llm_timeout_seconds: float = Field(default=180, ge=10)
     llm_max_retries: int = Field(default=2, ge=0, le=5)
+    knowledge_context_chunks: int = Field(default=6, ge=0, le=20)
 
     report_language: Literal["en", "es"] = "en"
     report_brand_name: str = "MotifCue"

@@ -15,6 +15,7 @@ async def synthesize_account(
     account_insights: list[AccountInsight],
     findings: list[PostFinding],
     language: str,
+    knowledge_context: list[dict] | None = None,
 ) -> tuple[AccountSynthesis, dict]:
     aggregates = account_metrics(findings)
     top_ids = set(aggregates["top_media_ids"])
@@ -41,6 +42,7 @@ async def synthesize_account(
             }
             for item in other_findings
         ],
+        "approved_reference_knowledge": knowledge_context or [],
     }
     synthesis = await llm.synthesize(
         SYNTHESIS_SYSTEM_PROMPT,

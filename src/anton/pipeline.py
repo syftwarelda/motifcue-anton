@@ -9,6 +9,7 @@ from anton.analyzer import ContentAnalyzer, write_snapshot
 from anton.backend import BackendClient, InstagramReconnectRequired
 from anton.config import Settings
 from anton.db import Database, LocalStage
+from anton.knowledge import KnowledgeService
 from anton.local_data import snapshot_path
 from anton.metrics import account_metrics, media_metrics
 from anton.report import build_report
@@ -35,6 +36,16 @@ class Pipeline:
         self.analyzer = analyzer
         self.storage = storage
         self.llm = llm
+
+    async def _knowledge_context(self, account, findings: list[PostFinding]) -> list[dict]:
+        limit = self.settings.knowledge_context_chunks
+        if limit == 0:
+            return []
+        context = await KnowledgeService(self.db, embedder=self.llm).report_context(
+            account, findings, limit
+        )
+        logger.info("● Approved knowledge context selected · excerpts=%d", len(context))
+        return context
 
     def _snapshot_path(self, order_id: str) -> Path:
         return self.settings.data_directory / "orders" / order_id / "instagram-snapshot.json"
@@ -79,6 +90,7 @@ class Pipeline:
                 data.accountInsights,
                 findings,
                 language or self.settings.report_language,
+                await self._knowledge_context(data.account, findings),
             )
 
         aggregates = account_metrics(findings)
@@ -175,6 +187,7 @@ class Pipeline:
             data.accountInsights,
             findings,
             report_language,
+            await self._knowledge_context(data.account, findings),
         )
         if self.db.get_job(order_id) is None:
             raise LookupError(f"No local job found for order {order_id}")
@@ -243,6 +256,7 @@ class Pipeline:
                 data.accountInsights,
                 findings,
                 self.settings.report_language,
+                await self._knowledge_context(data.account, findings),
             )
             self.db.update_job(
                 order_id,
