@@ -120,24 +120,26 @@ COPY = {
         "saves_note": "Utility: whether the content was worth returning to.",
         "shares": "SHARES",
         "shares_note": "Relevance: whether it was worth sending onward.",
-        "rate": "ACTIONS / REACH",
-        "rate_note": "Average response actions compared with accounts reached.",
+        "rate": "ACTIONS PER 100",
+        "rate_note": "Median actions per 100 reached accounts.",
         "routine": "WEEKLY REVIEW ROUTINE",
         "limitations": "READ THIS REPORT WITH CONTEXT",
         "no_metric": "N/A",
         "pieces": "pieces",
         "median_reach": "median reach",
         "median_interactions": "median interactions",
-        "interaction_rate": "actions / reach",
+        "interaction_rate": "actions / 100 reached",
         "account_size": "Account size",
         "included": "Included in this audit",
         "posts_with_reach": "posts with reach data",
-        "median_rate_note": "median actions / reach",
+        "median_rate_note": "median actions per 100 reached",
         "format_signal": "FORMAT SIGNAL",
         "week": "WEEK",
         "top_reach": "Reach",
         "top_interactions": "Interactions",
         "top_saves": "Saves",
+        "top_shares": "Shares",
+        "top_rate": "Actions / 100",
         "top_views": "Views",
         "data_coverage": "DATA COVERAGE",
         "data_window": "DATE RANGE",
@@ -147,6 +149,17 @@ COPY = {
         "with_reach": "include reach",
         "with_saves": "include saves",
         "with_shares": "include shares",
+        "posts_total": "posts total",
+        "with_reach_short": "WITH REACH",
+        "baseline": "HISTORICAL BASELINE",
+        "baseline_note": "Metrics below use only posts where each signal is available.",
+        "metric_legend": (
+            "Reach = discovery · Saves = utility · Shares = send-worthiness · "
+            "Actions per 100 = response intensity."
+        ),
+        "image_job": "Build familiarity through personal, frequent moments.",
+        "carousel_album_job": "Tell deeper stories that invite sustained interaction.",
+        "video_job": "Reach new viewers through movement and immediate hooks.",
     },
     "es": {
         "report": "AUDITORÍA DE CRECIMIENTO",
@@ -219,24 +232,26 @@ COPY = {
         "saves_note": "Utilidad: si valió la pena volver al contenido.",
         "shares": "COMPARTIDOS",
         "shares_note": "Relevancia: si valió la pena enviarlo a alguien.",
-        "rate": "ACCIONES / ALCANCE",
-        "rate_note": "Promedio de acciones frente a las cuentas alcanzadas.",
+        "rate": "ACCIONES POR 100",
+        "rate_note": "Mediana de acciones por cada 100 cuentas alcanzadas.",
         "routine": "RUTINA DE REVISIÓN SEMANAL",
         "limitations": "LEE ESTE REPORTE CON CONTEXTO",
         "no_metric": "N/D",
         "pieces": "piezas",
         "median_reach": "alcance mediano",
         "median_interactions": "interacciones medianas",
-        "interaction_rate": "acciones / alcance",
+        "interaction_rate": "acciones / 100 alcanzadas",
         "account_size": "Tamaño de la cuenta",
         "included": "Incluidas en esta auditoría",
         "posts_with_reach": "posts con datos de alcance",
-        "median_rate_note": "mediana de acciones / alcance",
+        "median_rate_note": "mediana de acciones por 100 alcanzadas",
         "format_signal": "SEÑAL DE FORMATO",
         "week": "SEMANA",
         "top_reach": "Alcance",
         "top_interactions": "Interacciones",
         "top_saves": "Guardados",
+        "top_shares": "Compartidos",
+        "top_rate": "Acciones / 100",
         "top_views": "Visualizaciones",
         "data_coverage": "COBERTURA DE DATOS",
         "data_window": "PERIODO",
@@ -246,6 +261,17 @@ COPY = {
         "with_reach": "incluyen alcance",
         "with_saves": "incluyen guardados",
         "with_shares": "incluyen compartidos",
+        "posts_total": "posts totales",
+        "with_reach_short": "CON ALCANCE",
+        "baseline": "LÍNEA BASE HISTÓRICA",
+        "baseline_note": "Las métricas usan solo los posts donde cada señal está disponible.",
+        "metric_legend": (
+            "Alcance = descubrimiento · Guardados = utilidad · Compartidos = relevancia · "
+            "Acciones por 100 = intensidad de respuesta."
+        ),
+        "image_job": "Construir familiaridad con momentos personales y frecuentes.",
+        "carousel_album_job": "Contar historias con profundidad que sostengan la interacción.",
+        "video_job": "Llegar a nuevas personas con movimiento y hooks inmediatos.",
     },
 }
 
@@ -476,6 +502,14 @@ def _styles() -> dict[str, ParagraphStyle]:
             leading=22,
             textColor=INK,
         ),
+        "metric_compact": ParagraphStyle(
+            "MetricCompact",
+            parent=base["Normal"],
+            fontName="AntonSans-Bold",
+            fontSize=16,
+            leading=18,
+            textColor=INK,
+        ),
         "metric_label": ParagraphStyle(
             "MetricLabel",
             parent=base["Normal"],
@@ -533,7 +567,8 @@ def _shorten(value: str | None, limit: int) -> str:
     clean = " ".join(value.split())
     if len(clean) <= limit:
         return clean
-    return clean[: limit - 1].rsplit(" ", 1)[0] + "…"
+    shortened = clean[: limit - 1].rsplit(" ", 1)[0].rstrip(" ,;:-")
+    return shortened + "."
 
 
 def _p(text: str, style: ParagraphStyle) -> Paragraph:
@@ -550,19 +585,30 @@ def _format_number(value: int | float | None, missing: str) -> str:
     return f"{value:,.0f}"
 
 
-def _format_percent(value: int | float | None, missing: str) -> str:
-    return missing if value is None else f"{value:.1f}%"
+def _format_per_100(value: int | float | None, missing: str) -> str:
+    if value is None:
+        return missing
+    return f"{value:.0f}" if value >= 10 else f"{value:.1f}"
+
+
+def _coverage_percent(count: int, total: int, missing: str) -> str:
+    return missing if not total else f"{round(count / total * 100):.0f}%"
 
 
 def _bullet_list(
-    items: Iterable[str], style: ParagraphStyle, *, limit: int = 4, char_limit: int = 180
+    items: Iterable[str],
+    style: ParagraphStyle,
+    *,
+    limit: int = 4,
+    char_limit: int | None = 180,
 ) -> list[Flowable]:
     output: list[Flowable] = []
     bullet_style = ParagraphStyle(
         f"{style.name}Bullet", parent=style, leftIndent=9, firstLineIndent=-8, bulletIndent=0
     )
     for item in list(items)[:limit]:
-        output.append(Paragraph(escape(_shorten(item, char_limit)), bullet_style, bulletText="+"))
+        text = _shorten(item, char_limit) if char_limit else " ".join(item.split())
+        output.append(Paragraph(escape(text), bullet_style, bulletText="+"))
     return output
 
 
@@ -582,14 +628,15 @@ def _page_intro(
 def _metric_card(
     label: str, value: str, note: str, background, styles: dict, width: float = 39 * mm
 ) -> Table:
+    value_style = styles["metric_compact"] if len(value) >= 6 else styles["metric"]
     card = Table(
         [
-            [_p(value, styles["metric"])],
+            [_p(value, value_style)],
             [_p(label, styles["metric_label"])],
             [_p(note, styles["metric_note"])],
         ],
         colWidths=[width],
-        rowHeights=[13 * mm, 7 * mm, 12 * mm],
+        rowHeights=[13 * mm, 7 * mm, 18 * mm],
     )
     card.setStyle(
         TableStyle(
@@ -627,14 +674,77 @@ def _signal_card(label: str, text: str, background, styles: dict) -> Table:
     return card
 
 
+def _coverage_card(label: str, value: str, note: str, background, styles: dict) -> Table:
+    card = Table(
+        [
+            [_p(value, styles["metric_compact"])],
+            [_p(label, styles["metric_label"])],
+            [_p(note, styles["metric_note"])],
+        ],
+        colWidths=[39 * mm],
+        rowHeights=[12 * mm, 7 * mm, 15 * mm],
+    )
+    card.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), background),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 5 * mm),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 5 * mm),
+                ("TOPPADDING", (0, 0), (-1, -1), 2 * mm),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2 * mm),
+            ]
+        )
+    )
+    return card
+
+
+def _format_strategy_card(
+    media_type: str, metrics: dict, copy: dict[str, str], styles: dict
+) -> Table:
+    key = f"{media_type.lower()}_job"
+    job = copy.get(key, copy["formats_intro"])
+    count = metrics.get("count", 0)
+    with_reach = metrics.get("count_with_reach", 0)
+    evidence = (
+        f"{with_reach}/{count} {copy['with_reach'].lower()} · "
+        f"{_format_number(metrics.get('median_reach'), copy['no_metric'])} "
+        f"{copy['median_reach']} · "
+        f"{_format_per_100(metrics.get('median_interaction_rate'), copy['no_metric'])} "
+        f"{copy['interaction_rate']}"
+    )
+    card = Table(
+        [
+            [_p(media_type.replace("_", " ").upper(), styles["card_title"])],
+            [_p(job, styles["body_bold"])],
+            [_p(evidence, styles["small"])],
+        ],
+        colWidths=[51 * mm],
+        rowHeights=[10 * mm, 23 * mm, 16 * mm],
+    )
+    card.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), WHITE),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6 * mm),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6 * mm),
+                ("TOPPADDING", (0, 0), (-1, -1), 4 * mm),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3 * mm),
+            ]
+        )
+    )
+    return card
+
+
 def _action_card(title: str, items: list[str], background, styles: dict) -> Table:
     content: list[Flowable] = [
         _p(title, styles["section"]),
         Rule(42 * mm, INK, 0.8),
         Spacer(1, 5 * mm),
     ]
-    content.extend(_bullet_list(items, styles["card_body"], limit=4, char_limit=115))
-    table = Table([[content]], colWidths=[51 * mm], rowHeights=[142 * mm])
+    content.extend(_bullet_list(items, styles["card_body"], limit=2, char_limit=210))
+    table = Table([[content]], colWidths=[51 * mm], rowHeights=[118 * mm])
     table.setStyle(
         TableStyle(
             [
@@ -683,13 +793,35 @@ def _top_post_card(
         metric_bits.append(
             f"{copy['top_saves']} {_format_number(metrics.get('saved'), copy['no_metric'])}"
         )
+    if metrics.get("shares") is not None:
+        metric_bits.append(
+            f"{copy['top_shares']} {_format_number(metrics.get('shares'), copy['no_metric'])}"
+        )
+    if finding.rates.get("interaction_rate_by_reach") is not None:
+        metric_bits.append(
+            f"{copy['top_rate']} "
+            f"{_format_per_100(finding.rates.get('interaction_rate_by_reach'), copy['no_metric'])}"
+        )
     elif metrics.get("views") is not None:
         metric_bits.append(
             f"{copy['top_views']} {_format_number(metrics.get('views'), copy['no_metric'])}"
         )
+    descriptors = []
+    if finding.visual.content_intent:
+        descriptors.append(finding.visual.content_intent)
+    descriptors.extend(finding.visual.topic_tags[:3])
+    descriptor = " · ".join(
+        value.replace("_", " ").strip().title() for value in descriptors if value.strip()
+    )
+    if not descriptor:
+        descriptor = _shorten(finding.visual.summary, 110)
     details = [
-        _p(f"{rank:02d}  {finding.media_type.replace('_', ' ').upper()}", styles["eyebrow"]),
-        _p(_shorten(finding.visual.summary, 190), styles["card_body"]),
+        _p(
+            f"{rank:02d}  {finding.media_type.replace('_', ' ').upper()}  ·  "
+            f"{finding.timestamp.date().isoformat()}",
+            styles["eyebrow"],
+        ),
+        _p(descriptor, styles["body_bold"]),
         Spacer(1, 2 * mm),
         _p(
             "  ·  ".join(metric_bits),
@@ -745,9 +877,9 @@ def _format_rows(aggregates: dict, copy: dict[str, str], styles: dict) -> list[l
     rows: list[list[Flowable]] = [
         [
             _p(copy["format"], styles["metric_label_white"]),
-            _p(copy["pieces"].upper(), styles["metric_label_white"]),
+            _p(copy["posts_label"].upper(), styles["metric_label_white"]),
+            _p(copy["with_reach_short"], styles["metric_label_white"]),
             _p(copy["median_reach"].upper(), styles["metric_label_white"]),
-            _p(copy["median_interactions"].upper(), styles["metric_label_white"]),
             _p(copy["interaction_rate"].upper(), styles["metric_label_white"]),
         ]
     ]
@@ -760,13 +892,10 @@ def _format_rows(aggregates: dict, copy: dict[str, str], styles: dict) -> list[l
             [
                 _p(media_type.replace("_", " ").title(), styles["body_bold"]),
                 _p(str(metrics.get("count", 0)), styles["body"]),
+                _p(str(metrics.get("count_with_reach", 0)), styles["body"]),
                 _p(_format_number(metrics.get("median_reach"), copy["no_metric"]), styles["body"]),
                 _p(
-                    _format_number(metrics.get("median_interactions"), copy["no_metric"]),
-                    styles["body"],
-                ),
-                _p(
-                    _format_percent(metrics.get("median_interaction_rate"), copy["no_metric"]),
+                    _format_per_100(metrics.get("median_interaction_rate"), copy["no_metric"]),
                     styles["body"],
                 ),
             ]
@@ -837,10 +966,14 @@ def build_report(
         bottomPadding=0,
     )
 
-    def decorate(canvas, doc) -> None:
+    def decorate_background(canvas, doc) -> None:
         canvas.saveState()
         canvas.setFillColor(CREAM)
         canvas.rect(0, 0, A4[0], A4[1], fill=1, stroke=0)
+        canvas.restoreState()
+
+    def decorate_footer(canvas, doc) -> None:
+        canvas.saveState()
         canvas.setStrokeColor(LINE)
         canvas.line(22 * mm, 13 * mm, A4[0] - 22 * mm, 13 * mm)
         canvas.setFillColor(INK)
@@ -852,7 +985,12 @@ def build_report(
     document.addPageTemplates(
         [
             PageTemplate(id="cover", frames=[cover_frame]),
-            PageTemplate(id="report", frames=[report_frame], onPage=decorate),
+            PageTemplate(
+                id="report",
+                frames=[report_frame],
+                onPage=decorate_background,
+                onPageEnd=decorate_footer,
+            ),
         ]
     )
 
@@ -944,8 +1082,7 @@ def build_report(
                 else aggregates.get("median_interactions"),
                 copy["no_metric"],
             ),
-            _format_percent(aggregates.get("median_interaction_rate"), copy["no_metric"])
-            + f" {copy['median_rate_note']}",
+            f"{aggregates.get('analyzed_posts', 0)} {copy['posts_total']}",
             BLUE,
             styles,
         ),
@@ -953,7 +1090,7 @@ def build_report(
     story.extend([Table([cards], colWidths=[40 * mm] * 4, hAlign="LEFT"), Spacer(1, 8 * mm)])
     format_table = Table(
         _format_rows(aggregates, copy, styles),
-        colWidths=[42 * mm, 20 * mm, 34 * mm, 36 * mm, 30 * mm],
+        colWidths=[40 * mm, 20 * mm, 27 * mm, 35 * mm, 40 * mm],
         repeatRows=1,
     )
     format_table.setStyle(
@@ -974,29 +1111,35 @@ def build_report(
     analyzed_posts = aggregates.get("analyzed_posts") or 0
     date_from = (aggregates.get("date_from") or copy["no_metric"])[:10]
     date_to = (aggregates.get("date_to") or copy["no_metric"])[:10]
+    posts_with_reach = aggregates.get("posts_with_reach", 0)
+    posts_with_saves = aggregates.get("posts_with_saves", 0)
+    posts_with_shares = aggregates.get("posts_with_shares", 0)
     coverage_cards = [
-        _signal_card(
+        _coverage_card(
             copy["data_window"],
-            f"{date_from} — {date_to}",
+            f"{date_from[:4]}-{date_to[2:4]}",
+            f"{date_from} - {date_to}",
             WHITE,
             styles,
         ),
-        _signal_card(
+        _coverage_card(
             copy["reach_coverage"],
-            (
-                f"{aggregates.get('posts_with_reach', 0)} / {analyzed_posts} "
-                f"{copy['posts_label']} {copy['with_reach']}."
-            ),
+            _coverage_percent(posts_with_reach, analyzed_posts, copy["no_metric"]),
+            f"{posts_with_reach} / {analyzed_posts} {copy['posts_label']}",
             MINT,
             styles,
         ),
-        _signal_card(
-            copy["depth_coverage"],
-            (
-                f"{aggregates.get('posts_with_saves', 0)} / {analyzed_posts} "
-                f"{copy['with_saves']} · {aggregates.get('posts_with_shares', 0)} / "
-                f"{analyzed_posts} {copy['with_shares']}."
-            ),
+        _coverage_card(
+            copy["saves"],
+            _coverage_percent(posts_with_saves, analyzed_posts, copy["no_metric"]),
+            f"{posts_with_saves} / {analyzed_posts} {copy['posts_label']}",
+            YELLOW,
+            styles,
+        ),
+        _coverage_card(
+            copy["shares"],
+            _coverage_percent(posts_with_shares, analyzed_posts, copy["no_metric"]),
+            f"{posts_with_shares} / {analyzed_posts} {copy['posts_label']}",
             BLUE,
             styles,
         ),
@@ -1007,7 +1150,7 @@ def build_report(
             format_table,
             Spacer(1, 8 * mm),
             _p(copy["data_coverage"], styles["eyebrow"]),
-            Table([coverage_cards], colWidths=[53 * mm] * 3, hAlign="LEFT"),
+            Table([coverage_cards], colWidths=[40 * mm] * 4, hAlign="LEFT"),
             PageBreak(),
         ]
     )
@@ -1027,16 +1170,7 @@ def build_report(
     )
     format_cards = []
     for media_type, metrics in list((aggregates.get("format_metrics") or {}).items())[:3]:
-        description = (
-            f"{metrics.get('count', 0)} {copy['pieces']} · "
-            f"{_format_number(metrics.get('median_reach'), copy['no_metric'])} "
-            f"{copy['median_reach']} · "
-            f"{_format_percent(metrics.get('median_interaction_rate'), copy['no_metric'])} "
-            f"{copy['interaction_rate']}"
-        )
-        format_cards.append(
-            _signal_card(media_type.replace("_", " ").upper(), description, WHITE, styles)
-        )
+        format_cards.append(_format_strategy_card(media_type, metrics, copy, styles))
     fallback_patterns = synthesis.format_patterns or synthesis.content_pillars or [""]
     while len(format_cards) < 3:
         format_cards.append(
@@ -1111,7 +1245,7 @@ def build_report(
                 [
                     _p(copy["visual"], styles["eyebrow"]),
                     *_bullet_list(
-                        synthesis.visual_identity, styles["card_body"], limit=4, char_limit=140
+                        synthesis.visual_identity, styles["card_body"], limit=3, char_limit=180
                     ),
                 ],
                 [
@@ -1119,8 +1253,8 @@ def build_report(
                     *_bullet_list(
                         synthesis.audience_response_patterns,
                         styles["card_body"],
-                        limit=4,
-                        char_limit=140,
+                        limit=3,
+                        char_limit=180,
                     ),
                 ],
             ]
@@ -1191,40 +1325,46 @@ def build_report(
     story.extend(
         _page_intro(copy, "measure", "measure_title", "measure_intro", styles, document.width)
     )
+    rate_count = aggregates.get("posts_with_interaction_rate", posts_with_reach)
     measure_cards = [
         _metric_card(
             copy["reach"],
             _format_number(aggregates.get("median_reach"), copy["no_metric"]),
-            copy["reach_note"],
+            f"{posts_with_reach} / {analyzed_posts} {copy['posts_label']}",
             RED,
             styles,
         ),
         _metric_card(
             copy["saves"],
             _format_number(aggregates.get("total_saves"), copy["no_metric"]),
-            copy["saves_note"],
+            f"{posts_with_saves} / {analyzed_posts} {copy['posts_label']}",
             YELLOW,
             styles,
         ),
         _metric_card(
             copy["shares"],
             _format_number(aggregates.get("total_shares"), copy["no_metric"]),
-            copy["shares_note"],
+            f"{posts_with_shares} / {analyzed_posts} {copy['posts_label']}",
             MINT,
             styles,
         ),
         _metric_card(
             copy["rate"],
-            _format_percent(aggregates.get("median_interaction_rate"), copy["no_metric"]),
-            copy["rate_note"],
+            _format_per_100(aggregates.get("median_interaction_rate"), copy["no_metric"]),
+            f"{rate_count} / {analyzed_posts} {copy['posts_label']}",
             BLUE,
             styles,
         ),
     ]
     story.extend(
         [
+            _p(copy["baseline"], styles["eyebrow"]),
+            _p(copy["baseline_note"], styles["small"]),
+            Spacer(1, 3 * mm),
             Table([measure_cards], colWidths=[40 * mm] * 4, hAlign="LEFT"),
-            Spacer(1, 10 * mm),
+            Spacer(1, 3 * mm),
+            _p(copy["metric_legend"], styles["small"]),
+            Spacer(1, 8 * mm),
             _p(copy["routine"], styles["eyebrow"]),
         ]
     )

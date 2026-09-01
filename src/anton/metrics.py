@@ -90,6 +90,13 @@ def account_metrics(findings: Iterable[PostFinding]) -> dict:
 
         format_metrics[media_type] = {
             "count": count,
+            "count_with_reach": sum(
+                isinstance(post.metrics.get("reach"), (int, float)) for post in selected
+            ),
+            "count_with_interaction_rate": sum(
+                isinstance(post.rates.get("interaction_rate_by_reach"), (int, float))
+                for post in selected
+            ),
             "median_reach": selected_median("reach"),
             "median_views": selected_median("views"),
             "median_interactions": selected_median("total_interactions"),
@@ -116,6 +123,9 @@ def account_metrics(findings: Iterable[PostFinding]) -> dict:
         "posts_with_reach": len(values("reach")),
         "posts_with_saves": len(values("saved")),
         "posts_with_shares": len(values("shares")),
+        "posts_with_interaction_rate": sum(
+            isinstance(post.rates.get("interaction_rate_by_reach"), (int, float)) for post in posts
+        ),
         "date_from": dated[0].isoformat() if dated else None,
         "date_to": dated[-1].isoformat() if dated else None,
     }

@@ -51,6 +51,10 @@ Return valid JSON only:
   "limitations": ["short, creator-friendly caveats only when material"]
 }
 
+Keep every list item to one complete sentence of at most 24 words. Return no more than three items
+for audience_response_patterns, visual_identity, keep, change, and tests. Return exactly four
+concise thirty_day_plan items, one per week. Use rounded whole numbers when citing account metrics.
+Propose one primary controlled experiment; do not create several overlapping matched-set tests.
 Write directly to the creator. Do not mention APIs, pipelines, tokens, models, samples, or system
 limitations. Express data limitations naturally, for example: "This recommendation is based on
 the posts available in the selected period." Every recommendation must connect to supplied evidence.

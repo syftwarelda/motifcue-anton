@@ -52,8 +52,11 @@ def test_account_metrics_ranks_by_interactions() -> None:
     assert summary["total_views"] == 360
     assert summary["total_interactions"] == 31
     assert summary["posts_with_reach"] == 3
+    assert summary["posts_with_interaction_rate"] == 0
     assert summary["format_metrics"]["IMAGE"] == {
         "count": 3,
+        "count_with_reach": 3,
+        "count_with_interaction_rate": 0,
         "median_reach": 100,
         "median_views": 120,
         "median_interactions": 9,
