@@ -7,6 +7,7 @@ from anton.schemas import (
     ExperimentPlan,
     GrowthOpportunity,
     PostFinding,
+    ProductionIdea,
     VisualAnalysis,
 )
 
@@ -77,6 +78,16 @@ def test_build_report_smoke(tmp_path) -> None:
                 "Adopt when the variant wins on reach in four of six posts without lower saves."
             ),
         ),
+        production_ideas=[
+            ProductionIdea(
+                title="The detail most visitors miss",
+                format="Short video",
+                opening="What does everyone miss in this place?",
+                build="Show the landmark, reveal the detail, then explain why it matters.",
+                response_prompt="What detail should we investigate next?",
+                primary_metric="reach",
+            )
+        ],
         thirty_day_plan=["Week 1: publish the first controlled test."],
     )
     finding = PostFinding(

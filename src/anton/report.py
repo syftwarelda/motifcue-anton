@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import UTC, datetime
 from html import escape
 from pathlib import Path
 
@@ -27,7 +28,14 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from anton.schemas import Account, AccountSynthesis, ExperimentPlan, GrowthOpportunity, PostFinding
+from anton.schemas import (
+    Account,
+    AccountSynthesis,
+    ExperimentPlan,
+    GrowthOpportunity,
+    PostFinding,
+    ProductionIdea,
+)
 
 INK = colors.HexColor("#171719")
 CREAM = colors.HexColor("#F7F3EA")
@@ -124,6 +132,18 @@ COPY = {
         "secondary_metrics": "DIAGNOSTIC METRICS",
         "duration": "DURATION",
         "decision_rule": "DECISION RULE",
+        "evidence_strength": "EVIDENCE STRENGTH",
+        "confidence_low": "LOW",
+        "confidence_medium": "MEDIUM",
+        "confidence_high": "HIGH",
+        "confidence_direction": "Treat these as testable directions, not settled conclusions.",
+        "ideas": "READY-TO-MAKE IDEAS",
+        "ideas_title": "Turn the strategy into actual posts.",
+        "ideas_intro": "Three original concepts with an opening, structure and response prompt.",
+        "opening": "OPENING",
+        "build": "STRUCTURE",
+        "response_prompt": "AUDIENCE PROMPT",
+        "idea_fallback_prompt": "Ask one specific question that helps shape the next post.",
         "focus": "30-DAY FOCUS",
         "plan": "30-DAY PLAN",
         "plan_title": "Four weeks with a clear purpose.",
@@ -257,6 +277,18 @@ COPY = {
         "secondary_metrics": "MÉTRICAS DE DIAGNÓSTICO",
         "duration": "DURACIÓN",
         "decision_rule": "REGLA DE DECISIÓN",
+        "evidence_strength": "SOLIDEZ DE LA EVIDENCIA",
+        "confidence_low": "BAJA",
+        "confidence_medium": "MEDIA",
+        "confidence_high": "ALTA",
+        "confidence_direction": "Trátalas como direcciones para probar, no como conclusiones.",
+        "ideas": "IDEAS LISTAS PARA PRODUCIR",
+        "ideas_title": "Convierte la estrategia en publicaciones reales.",
+        "ideas_intro": "Tres conceptos originales con apertura, estructura y pregunta final.",
+        "opening": "APERTURA",
+        "build": "ESTRUCTURA",
+        "response_prompt": "PREGUNTA PARA LA AUDIENCIA",
+        "idea_fallback_prompt": "Haz una pregunta específica que ayude a definir el próximo post.",
         "focus": "FOCO DE 30 DÍAS",
         "plan": "PLAN DE 30 DÍAS",
         "plan_title": "Cuatro semanas con un propósito claro.",
@@ -517,6 +549,14 @@ def _styles() -> dict[str, ParagraphStyle]:
             fontSize=7.3,
             leading=10,
             textColor=MUTED,
+        ),
+        "small_white": ParagraphStyle(
+            "SmallWhite",
+            parent=base["BodyText"],
+            fontName="AntonSans",
+            fontSize=7.3,
+            leading=10,
+            textColor=WHITE,
         ),
         "card_title": ParagraphStyle(
             "CardTitle",
@@ -830,6 +870,66 @@ def _opportunity_card(opportunity, background, styles: dict, copy: dict[str, str
         )
     )
     return table
+
+
+def _confidence_banner(label: str, note: str, styles: dict, copy: dict[str, str]) -> Table:
+    banner = Table(
+        [
+            [
+                _p(f"{copy['evidence_strength']}: {label}", styles["metric_label_white"]),
+                _p(note, styles["small_white"]),
+            ]
+        ],
+        colWidths=[51 * mm, 109 * mm],
+        rowHeights=[16 * mm],
+    )
+    banner.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), INK),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 5 * mm),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 5 * mm),
+            ]
+        )
+    )
+    return banner
+
+
+def _production_idea_row(
+    index: int, idea: ProductionIdea, background, styles: dict, copy: dict[str, str]
+) -> Table:
+    details = [
+        _p(f"{idea.format.upper()} · {idea.title}", styles["body_bold"]),
+        Spacer(1, 2 * mm),
+        _p(f"{copy['opening']}: {_shorten(idea.opening, 130)}", styles["small"]),
+        _p(f"{copy['build']}: {_shorten(idea.build, 180)}", styles["small"]),
+        _p(
+            f"{copy['response_prompt']}: {_shorten(idea.response_prompt, 120)}",
+            styles["small"],
+        ),
+        _p(f"{copy['primary_metric']}: {idea.primary_metric}", styles["metric_label"]),
+    ]
+    row = Table(
+        [[_p(f"{index:02d}", styles["metric_compact"]), details]],
+        colWidths=[24 * mm, 136 * mm],
+        rowHeights=[47 * mm],
+    )
+    row.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (0, 0), background),
+                ("BACKGROUND", (1, 0), (1, 0), WHITE),
+                ("BOX", (0, 0), (-1, -1), 0.8, LINE),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6 * mm),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6 * mm),
+                ("TOPPADDING", (0, 0), (-1, -1), 4 * mm),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4 * mm),
+            ]
+        )
+    )
+    return row
 
 
 def _experiment_panel(
@@ -1374,6 +1474,26 @@ def build_report(
     story.extend(
         _page_intro(copy, "growth", "growth_title", "growth_intro", styles, document.width)
     )
+    coverage_ratio = posts_with_reach / analyzed_posts if analyzed_posts else 0
+    latest_post = max((finding.timestamp for finding in findings), default=None)
+    data_age_days = (datetime.now(UTC) - latest_post).days if latest_post else 10_000
+    if coverage_ratio >= 0.7 and data_age_days <= 180:
+        confidence = copy["confidence_high"]
+    elif coverage_ratio >= 0.4 and data_age_days <= 365:
+        confidence = copy["confidence_medium"]
+    else:
+        confidence = copy["confidence_low"]
+    confidence_note = (
+        f"{posts_with_reach}/{analyzed_posts} {copy['posts_with_reach']}; "
+        f"{copy['data_window'].lower()} {date_from} - {date_to}. "
+        f"{copy['confidence_direction']}"
+    )
+    story.extend(
+        [
+            _confidence_banner(confidence, confidence_note, styles, copy),
+            Spacer(1, 4 * mm),
+        ]
+    )
     opportunities = list(synthesis.growth_opportunities[:3])
     legacy_groups = [synthesis.keep, synthesis.change, synthesis.tests]
     legacy_objectives = [copy["keep"], copy["change"], copy["test"]]
@@ -1483,6 +1603,35 @@ def build_report(
             PageBreak(),
         ]
     )
+
+    story.extend(_page_intro(copy, "ideas", "ideas_title", "ideas_intro", styles, document.width))
+    production_ideas = list(synthesis.production_ideas[:3])
+    while len(production_ideas) < 3:
+        opportunity = opportunities[len(production_ideas)]
+        production_ideas.append(
+            ProductionIdea(
+                title=opportunity.opportunity,
+                format=opportunity.objective,
+                opening=opportunity.opportunity,
+                build=opportunity.play,
+                response_prompt=copy["idea_fallback_prompt"],
+                primary_metric=opportunity.primary_metric,
+            )
+        )
+    for index, idea in enumerate(production_ideas, 1):
+        story.extend(
+            [
+                _production_idea_row(
+                    index,
+                    idea,
+                    [RED, YELLOW, MINT][index - 1],
+                    styles,
+                    copy,
+                ),
+                Spacer(1, 4 * mm),
+            ]
+        )
+    story.append(PageBreak())
 
     story.extend(_page_intro(copy, "plan", "plan_title", "plan_intro", styles, document.width))
     plan_items = list(synthesis.thirty_day_plan[:4])

@@ -141,6 +141,15 @@ class GrowthOpportunity(BaseModel):
     primary_metric: str
 
 
+class ProductionIdea(BaseModel):
+    title: str
+    format: str
+    opening: str
+    build: str
+    response_prompt: str
+    primary_metric: str
+
+
 class ExperimentPlan(BaseModel):
     hypothesis: str
     control: str
@@ -177,5 +186,6 @@ class AccountSynthesis(BaseModel):
     growth_thesis: str | None = None
     growth_opportunities: list[GrowthOpportunity] = Field(default_factory=list, max_length=4)
     primary_experiment: ExperimentPlan | None = None
+    production_ideas: list[ProductionIdea] = Field(default_factory=list, max_length=4)
     thirty_day_plan: list[str] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)

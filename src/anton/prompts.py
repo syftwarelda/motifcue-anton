@@ -60,7 +60,7 @@ Return valid JSON only:
       "primary_metric": "one metric that decides whether it worked"
     }
   ],
-    "primary_experiment": {
+  "primary_experiment": {
     "hypothesis": "a falsifiable if-then hypothesis",
     "control": "what stays as the current baseline",
     "variant": "the one intentional change",
@@ -70,6 +70,16 @@ Return valid JSON only:
     "duration": "a practical number of comparable posts or weeks",
     "decision_rule": "the explicit condition for adopt, iterate, or stop"
   },
+  "production_ideas": [
+    {
+      "title": "a memorable working title",
+      "format": "the exact format",
+      "opening": "the first-frame hook or opening line",
+      "build": "a concise beat-by-beat structure",
+      "response_prompt": "a natural audience prompt that offers or requests value",
+      "primary_metric": "one observable metric"
+    }
+  ],
   "thirty_day_plan": ["week-by-week or sequenced actions"],
   "limitations": ["short, creator-friendly caveats only when material"]
 }
@@ -81,6 +91,10 @@ community/conversion. Each must connect evidence to a play and one primary metri
 four concise thirty_day_plan items, one per week, that execute the opportunities and the primary
 experiment. Use rounded whole numbers when citing account metrics. Propose exactly one primary
 controlled experiment; vary one meaningful element and keep comparable factors stable.
+Return exactly three production_ideas derived from the growth opportunities. Make each materially
+original and ready to create: include actual opening copy, a concrete structure, and a natural
+response prompt. Never use a generic request to follow the account. Replies should add useful,
+specific value or reveal demand for the next piece of content.
 
 Never recommend directly reposting or duplicating the creator's previous posts. A winning post may
 be used only as evidence or as a pattern for a materially new, original variation. Do not say merely
@@ -104,7 +118,8 @@ def synthesis_user_prompt(payload_json: str, language: str) -> str:
     return (
         f"Write the complete analysis in {language_name}. "
         "Use plain language that a creator can act on immediately. Lead to decisions, not a recap. "
-        "Make the growth thesis, three opportunities, primary experiment, and four-week execution "
-        "plan specific enough to follow without interpretation.\n\n"
+        "Make the growth thesis, three opportunities, primary experiment, production ideas, and "
+        "four-week execution plan specific enough to follow without interpretation. Use only "
+        "metrics present in the supplied account evidence.\n\n"
         f"Account evidence:\n{payload_json}"
     )

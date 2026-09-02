@@ -15,7 +15,7 @@ from anton.metrics import account_metrics, media_metrics
 from anton.report import build_report
 from anton.schemas import AccountSynthesis, InstagramDataPage, PostFinding, VisualAnalysis
 from anton.storage import ReportStorage
-from anton.synthesis import synthesize_account
+from anton.synthesis import normalize_strategy_metrics, synthesize_account
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +81,7 @@ class Pipeline:
         job = self.db.get_job(order_id)
         if job and job.synthesis_json:
             synthesis = AccountSynthesis.model_validate_json(job.synthesis_json)
+            synthesis = normalize_strategy_metrics(synthesis, data.accountInsights, findings)
             logger.info("✓ Using saved account synthesis")
         else:
             logger.info("● No saved synthesis; generating one with the local text model")
