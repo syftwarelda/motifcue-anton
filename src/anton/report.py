@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from html import escape
 from pathlib import Path
 
@@ -94,8 +94,10 @@ COPY = {
         "coverage": "FORMAT BREAKDOWN",
         "format": "FORMAT",
         "top": "TOP CONTENT",
-        "top_title": "The posts that best explain what works.",
-        "top_intro": "These pieces combine the strongest available interaction and reach signals.",
+        "top_title": "The posts most relevant to what comes next.",
+        "top_intro": (
+            "Recent evidence comes first; older standouts appear only as historical context."
+        ),
         "formats": "FORMAT + CONTENT STRATEGY",
         "formats_title": "Give every recurring format a clear job.",
         "formats_intro": "Use performance patterns to decide what each format should achieve.",
@@ -137,6 +139,12 @@ COPY = {
         "confidence_medium": "MEDIUM",
         "confidence_high": "HIGH",
         "confidence_direction": "Treat these as testable directions, not settled conclusions.",
+        "confidence_basis": "Confidence reflects recency, repeated evidence and metric coverage.",
+        "observed": "OBSERVED",
+        "inference": "STRATEGIC INFERENCE",
+        "next_move": "NEXT MOVE",
+        "approved_guidance": "APPROVED GUIDANCE",
+        "supporting_posts": "SUPPORTING POSTS",
         "ideas": "READY-TO-MAKE IDEAS",
         "ideas_title": "Turn the strategy into actual posts.",
         "ideas_intro": "Three original concepts with an opening, structure and response prompt.",
@@ -235,9 +243,9 @@ COPY = {
         "coverage": "DESGLOSE POR FORMATO",
         "format": "FORMATO",
         "top": "MEJOR CONTENIDO",
-        "top_title": "Los posts que mejor explican qué funciona.",
+        "top_title": "Los posts más relevantes para lo que viene.",
         "top_intro": (
-            "Estas piezas combinan las señales disponibles más fuertes de interacción y alcance."
+            "La evidencia reciente va primero; los destacados antiguos quedan como contexto."
         ),
         "formats": "ESTRATEGIA DE FORMATOS Y CONTENIDO",
         "formats_title": "Dale un trabajo claro a cada formato recurrente.",
@@ -282,6 +290,14 @@ COPY = {
         "confidence_medium": "MEDIA",
         "confidence_high": "ALTA",
         "confidence_direction": "Trátalas como direcciones para probar, no como conclusiones.",
+        "confidence_basis": (
+            "La confianza refleja actualidad, evidencia repetida y cobertura de métricas."
+        ),
+        "observed": "OBSERVADO",
+        "inference": "INTERPRETACIÓN ESTRATÉGICA",
+        "next_move": "SIGUIENTE MOVIMIENTO",
+        "approved_guidance": "GUÍA APROBADA",
+        "supporting_posts": "POSTS DE RESPALDO",
         "ideas": "IDEAS LISTAS PARA PRODUCIR",
         "ideas_title": "Convierte la estrategia en publicaciones reales.",
         "ideas_intro": "Tres conceptos originales con apertura, estructura y pregunta final.",
@@ -872,6 +888,83 @@ def _opportunity_card(opportunity, background, styles: dict, copy: dict[str, str
     return table
 
 
+def _growth_trace_row(
+    opportunity,
+    findings_by_id: dict[str, PostFinding],
+    background,
+    styles: dict,
+    copy: dict[str, str],
+) -> Table:
+    evidence_findings = [
+        findings_by_id[media_id]
+        for media_id in opportunity.evidence_media_ids[:2]
+        if media_id in findings_by_id
+    ]
+    visuals: list[Flowable] = []
+    for finding in evidence_findings:
+        if finding.thumbnail_path and Path(finding.thumbnail_path).exists():
+            visuals.append(CropImage(finding.thumbnail_path, 17 * mm, 17 * mm))
+        else:
+            visuals.append(_p(finding.timestamp.date().isoformat(), styles["metric_label"]))
+    if not visuals:
+        visuals.append(_p(copy["no_metric"], styles["metric_label"]))
+    evidence_dates = " · ".join(
+        finding.timestamp.date().isoformat() for finding in evidence_findings
+    )
+    evidence_cell: list[Flowable] = [
+        _p(copy["supporting_posts"], styles["metric_label"]),
+        Spacer(1, 2 * mm),
+        Table([visuals], colWidths=[18 * mm] * len(visuals), hAlign="LEFT"),
+    ]
+    if evidence_dates:
+        evidence_cell.append(_p(evidence_dates, styles["small"]))
+
+    confidence_key = f"confidence_{opportunity.confidence}"
+    analysis_cell: list[Flowable] = [
+        _p(
+            f"{copy['inference']} · {opportunity.objective.upper()} · {copy[confidence_key]}",
+            styles["metric_label"],
+        ),
+        _p(_shorten(opportunity.opportunity, 105), styles["body_bold"]),
+        _p(f"{copy['observed']}: {_shorten(opportunity.evidence, 135)}", styles["small"]),
+    ]
+    if opportunity.reference_sources:
+        analysis_cell.append(
+            _p(
+                f"{copy['approved_guidance']}: {_shorten(opportunity.reference_sources[0], 80)}",
+                styles["small"],
+            )
+        )
+    action_cell: list[Flowable] = [
+        _p(copy["next_move"], styles["metric_label"]),
+        _p(_shorten(opportunity.play, 155), styles["small"]),
+        Spacer(1, 2 * mm),
+        _p(copy["primary_metric"], styles["metric_label"]),
+        _p(_shorten(opportunity.primary_metric, 55), styles["body_bold"]),
+    ]
+    row = Table(
+        [[evidence_cell, analysis_cell, action_cell]],
+        colWidths=[39 * mm, 72 * mm, 49 * mm],
+        rowHeights=[45 * mm],
+    )
+    row.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (0, 0), background),
+                ("BACKGROUND", (1, 0), (-1, 0), WHITE),
+                ("BOX", (0, 0), (-1, -1), 0.8, LINE),
+                ("LINEAFTER", (0, 0), (1, 0), 0.6, LINE),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 5 * mm),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 5 * mm),
+                ("TOPPADDING", (0, 0), (-1, -1), 4 * mm),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4 * mm),
+            ]
+        )
+    )
+    return row
+
+
 def _confidence_banner(label: str, note: str, styles: dict, copy: dict[str, str]) -> Table:
     banner = Table(
         [
@@ -1189,14 +1282,28 @@ def build_report(
         ]
     )
 
-    ranked = sorted(
-        findings,
+    latest_captured = max(
+        (finding.timestamp for finding in findings),
+        default=datetime.now(UTC),
+    )
+    recent_cutoff = latest_captured - timedelta(days=180)
+    recent_ranked = sorted(
+        (finding for finding in findings if finding.timestamp >= recent_cutoff),
         key=lambda item: (
             item.metrics.get("total_interactions") or 0,
             item.metrics.get("reach") or 0,
         ),
         reverse=True,
     )
+    historical_ranked = sorted(
+        (finding for finding in findings if finding.timestamp < recent_cutoff),
+        key=lambda item: (
+            item.metrics.get("total_interactions") or 0,
+            item.metrics.get("reach") or 0,
+        ),
+        reverse=True,
+    )
+    ranked = recent_ranked + historical_ranked
     image_paths = [
         finding.thumbnail_path
         for finding in ranked
@@ -1474,26 +1581,6 @@ def build_report(
     story.extend(
         _page_intro(copy, "growth", "growth_title", "growth_intro", styles, document.width)
     )
-    coverage_ratio = posts_with_reach / analyzed_posts if analyzed_posts else 0
-    latest_post = max((finding.timestamp for finding in findings), default=None)
-    data_age_days = (datetime.now(UTC) - latest_post).days if latest_post else 10_000
-    if coverage_ratio >= 0.7 and data_age_days <= 180:
-        confidence = copy["confidence_high"]
-    elif coverage_ratio >= 0.4 and data_age_days <= 365:
-        confidence = copy["confidence_medium"]
-    else:
-        confidence = copy["confidence_low"]
-    confidence_note = (
-        f"{posts_with_reach}/{analyzed_posts} {copy['posts_with_reach']}; "
-        f"{copy['data_window'].lower()} {date_from} - {date_to}. "
-        f"{copy['confidence_direction']}"
-    )
-    story.extend(
-        [
-            _confidence_banner(confidence, confidence_note, styles, copy),
-            Spacer(1, 4 * mm),
-        ]
-    )
     opportunities = list(synthesis.growth_opportunities[:3])
     legacy_groups = [synthesis.keep, synthesis.change, synthesis.tests]
     legacy_objectives = [copy["keep"], copy["change"], copy["test"]]
@@ -1510,26 +1597,29 @@ def build_report(
                 primary_metric=copy["rate"],
             )
         )
-    opportunity_table = Table(
-        [
-            [
-                _opportunity_card(opportunities[0], RED, styles, copy),
-                _opportunity_card(opportunities[1], YELLOW, styles, copy),
-                _opportunity_card(opportunities[2], MINT, styles, copy),
-            ]
-        ],
-        colWidths=[53 * mm] * 3,
-        hAlign="LEFT",
-    )
-    opportunity_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
+    findings_by_id = {finding.media_id: finding for finding in findings}
     growth_thesis = (
         synthesis.growth_thesis
         or (synthesis.change or synthesis.tests or synthesis.executive_summary)[0]
     )
+    story.extend([_p(copy["confidence_basis"], styles["small"]), Spacer(1, 4 * mm)])
+    for opportunity, background in zip(opportunities, [RED, YELLOW, MINT], strict=True):
+        story.extend(
+            [
+                KeepTogether(
+                    _growth_trace_row(
+                        opportunity,
+                        findings_by_id,
+                        background,
+                        styles,
+                        copy,
+                    )
+                ),
+                Spacer(1, 4 * mm),
+            ]
+        )
     story.extend(
         [
-            opportunity_table,
-            Spacer(1, 7 * mm),
             _p(copy["focus"], styles["eyebrow"]),
             _dark_callout(growth_thesis, styles),
             PageBreak(),

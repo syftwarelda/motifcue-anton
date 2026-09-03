@@ -39,6 +39,11 @@ Use the account evidence to decide what should happen next. Limit retrospective 
 repeatable patterns, but never claim causation from correlation or invent audience demographics,
 benchmarks, features, or missing data.
 
+Treat recent_posts as the primary evidence for the current strategy. Use historical_reference_posts
+only to identify durable identity or patterns also supported by recent content. Never make an old
+outlier the sole basis of a primary recommendation. The application will attach supporting post IDs,
+confidence labels, and approved source titles after your response; do not invent those fields.
+
 Return valid JSON only:
 {
   "account_positioning": "one clear sentence",

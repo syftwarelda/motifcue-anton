@@ -54,7 +54,18 @@ def test_strategy_uses_only_available_metrics_and_removes_follow_ask() -> None:
         visual=VisualAnalysis(summary="A clear travel scene."),
     )
 
-    normalized = normalize_strategy_metrics(synthesis, [], [finding])
+    normalized = normalize_strategy_metrics(
+        synthesis,
+        [],
+        [finding],
+        [
+            {
+                "title": "Official community guidance",
+                "context": "community",
+                "guidance": "Use specific questions to create useful comment conversations.",
+            }
+        ],
+    )
 
     assert normalized.growth_opportunities[0].primary_metric == "comments per 100 reached"
     assert "follow" not in normalized.growth_opportunities[0].play.lower()
@@ -64,3 +75,6 @@ def test_strategy_uses_only_available_metrics_and_removes_follow_ask() -> None:
     assert "3 higher" not in normalized.primary_experiment.decision_rule
     assert normalized.production_ideas[0].primary_metric == "reach"
     assert "follow invitation" not in normalized.thirty_day_plan[0]
+    assert normalized.growth_opportunities[0].evidence_media_ids == ["one"]
+    assert normalized.growth_opportunities[0].confidence == "low"
+    assert normalized.growth_opportunities[0].reference_sources == ["Official community guidance"]

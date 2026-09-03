@@ -50,6 +50,9 @@ def test_build_report_smoke(tmp_path) -> None:
                 evidence="Useful topics lead the available results.",
                 play="Publish new variants of proven topics with a concrete opening promise.",
                 primary_metric="Reach from non-followers",
+                evidence_media_ids=["one"],
+                confidence="high",
+                reference_sources=["Official creator guidance"],
             ),
             GrowthOpportunity(
                 objective="Retention",

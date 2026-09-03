@@ -139,6 +139,9 @@ class GrowthOpportunity(BaseModel):
     evidence: str
     play: str
     primary_metric: str
+    evidence_media_ids: list[str] = Field(default_factory=list, max_length=2)
+    confidence: Literal["low", "medium", "high"] = "low"
+    reference_sources: list[str] = Field(default_factory=list, max_length=2)
 
 
 class ProductionIdea(BaseModel):
