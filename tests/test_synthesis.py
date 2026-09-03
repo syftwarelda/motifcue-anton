@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from anton.schemas import (
     AccountSynthesis,
@@ -78,3 +78,78 @@ def test_strategy_uses_only_available_metrics_and_removes_follow_ask() -> None:
     assert normalized.growth_opportunities[0].evidence_media_ids == ["one"]
     assert normalized.growth_opportunities[0].confidence == "low"
     assert normalized.growth_opportunities[0].reference_sources == ["Official community guidance"]
+
+
+def test_opportunities_receive_distinct_balanced_evidence() -> None:
+    synthesis = AccountSynthesis(
+        account_positioning="A creator testing a new direction.",
+        executive_summary=["One.", "Two.", "Three."],
+        growth_opportunities=[
+            GrowthOpportunity(
+                objective="discovery",
+                opportunity="Balance exposure and response.",
+                evidence="Some posts reached people and prompted action.",
+                play="Test a clearer opening.",
+                primary_metric="reach",
+            ),
+            GrowthOpportunity(
+                objective="retention",
+                opportunity="Create useful depth.",
+                evidence="Some posts earned saves.",
+                play="Add a practical payoff.",
+                primary_metric="saves",
+            ),
+            GrowthOpportunity(
+                objective="community",
+                opportunity="Create a real conversation.",
+                evidence="Some posts earned comments.",
+                play="Ask a specific question.",
+                primary_metric="comments",
+            ),
+        ],
+    )
+    now = datetime.now(UTC)
+
+    def finding(
+        media_id: str,
+        days_old: int,
+        reach: int,
+        interactions: int,
+        comments: int,
+        saved: int,
+        summary: str,
+    ) -> PostFinding:
+        return PostFinding(
+            media_id=media_id,
+            media_type="VIDEO" if days_old < 30 else "CAROUSEL_ALBUM",
+            timestamp=now - timedelta(days=days_old),
+            metrics={
+                "reach": reach,
+                "total_interactions": interactions,
+                "comments": comments,
+                "saved": saved,
+            },
+            rates={"interaction_rate_by_reach": interactions / reach * 100},
+            visual=VisualAnalysis(summary=summary),
+        )
+
+    findings = [
+        finding("recent-a", 1, 500, 5, 0, 0, "The same motorcycle frame."),
+        finding("recent-b", 1, 200, 0, 0, 0, "The same motorcycle frame."),
+        finding("old-a", 500, 250, 90, 6, 1, "A useful city carousel."),
+        finding("old-b", 510, 150, 120, 4, 2, "A detailed route carousel."),
+        finding("old-c", 520, 100, 80, 12, 0, "A community question."),
+        finding("old-d", 530, 90, 70, 8, 3, "A practical checklist."),
+        finding("old-e", 540, 80, 60, 7, 4, "A story with a payoff."),
+    ]
+
+    normalized = normalize_strategy_metrics(synthesis, [], findings)
+    evidence_ids = [
+        media_id
+        for opportunity in normalized.growth_opportunities
+        for media_id in opportunity.evidence_media_ids
+    ]
+
+    assert len(evidence_ids) == 6
+    assert len(set(evidence_ids)) == 6
+    assert not {"recent-a", "recent-b"}.issubset(evidence_ids)

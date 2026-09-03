@@ -1,8 +1,15 @@
+import json
+
 import httpx
 import pytest
 import respx
+from pydantic import BaseModel
 
 from anton.llm import LlamaClient
+
+
+class StructuredReply(BaseModel):
+    ok: bool
 
 
 def test_extract_json_accepts_fenced_response() -> None:
@@ -43,5 +50,33 @@ async def test_embed_uses_local_openai_compatible_endpoint() -> None:
         assert route.calls.last.request.content
         assert b"search_document: creator strategy" in route.calls.last.request.content
         assert result == [[0.1, 0.2]]
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_synthesis_uses_low_reasoning_without_output_limit() -> None:
+    client = LlamaClient(
+        "http://127.0.0.1:11434/v1",
+        "key",
+        "text-model",
+        "vision-model",
+        "embedding-model",
+        10,
+        0,
+    )
+    try:
+        with respx.mock:
+            route = respx.post("http://127.0.0.1:11434/v1/chat/completions").mock(
+                return_value=httpx.Response(
+                    200,
+                    json={"choices": [{"message": {"content": '{"ok": true}'}}]},
+                )
+            )
+            result = await client.synthesize("system", "user", StructuredReply)
+        payload = json.loads(route.calls.last.request.content)
+        assert payload["reasoning_effort"] == "low"
+        assert "max_tokens" not in payload
+        assert result.ok is True
     finally:
         await client.close()

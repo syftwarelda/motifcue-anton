@@ -133,6 +133,56 @@ def _finding_supports_metric(finding: PostFinding, metric: str) -> bool:
     return False
 
 
+def _number(value: float | int | None) -> float:
+    return float(value) if isinstance(value, (int, float)) else 0.0
+
+
+def _balanced_performance(finding: PostFinding) -> float:
+    reach = _number(finding.metrics.get("reach"))
+    interactions = _number(finding.metrics.get("total_interactions"))
+    return (max(reach, 1.0) * (interactions + 1.0)) ** 0.5
+
+
+def _response_strength(finding: PostFinding) -> float:
+    return (
+        _number(finding.metrics.get("comments")) * 12
+        + _number(finding.metrics.get("saved")) * 8
+        + _number(finding.metrics.get("shares")) * 8
+        + _number(finding.metrics.get("total_interactions"))
+    )
+
+
+def _visual_key(finding: PostFinding) -> str:
+    return "|".join(
+        [
+            finding.media_type.lower(),
+            finding.visual.summary.strip().lower(),
+            (finding.visual.composition or "").strip().lower(),
+        ]
+    )
+
+
+def _objective_strength(finding: PostFinding, objective: str) -> float:
+    objective = objective.lower()
+    if any(token in objective for token in ("community", "conversion", "comunidad", "convers")):
+        return _number(finding.metrics.get("comments")) * 100 + _response_strength(finding)
+    if any(token in objective for token in ("retention", "depth", "retenc", "profund")):
+        return (
+            _number(finding.metrics.get("saved")) * 100
+            + _number(finding.metrics.get("shares")) * 100
+            + _response_strength(finding)
+        )
+    return _balanced_performance(finding)
+
+
+def _current_direction_status(recent_findings: list[PostFinding]) -> str:
+    if len(recent_findings) < 6:
+        return "thin: insufficient to call the current format or topic a winner"
+    if len(recent_findings) < 12:
+        return "developing: useful for hypotheses, not yet a settled winner"
+    return "established enough to compare recurring patterns"
+
+
 def _attach_evidence_metadata(
     synthesis: AccountSynthesis,
     findings: list[PostFinding],
@@ -141,7 +191,8 @@ def _attach_evidence_metadata(
     if not findings:
         return
     latest_captured = max(finding.timestamp for finding in findings)
-    valid_ids = {finding.media_id for finding in findings}
+    used_ids: set[str] = set()
+    used_visuals: set[str] = set()
     for opportunity in synthesis.growth_opportunities:
         opportunity_tokens = _tokens(
             " ".join(
@@ -171,8 +222,9 @@ def _attach_evidence_metadata(
             interactions = int(finding.metrics.get("total_interactions") or 0)
             scored.append(
                 (
-                    recency,
+                    _objective_strength(finding, opportunity.objective),
                     overlap,
+                    recency,
                     metric_support,
                     interactions,
                     finding.timestamp,
@@ -180,11 +232,53 @@ def _attach_evidence_metadata(
                 )
             )
         scored.sort(reverse=True)
-        supplied_ids = [
-            media_id for media_id in opportunity.evidence_media_ids if media_id in valid_ids
+        selected_ids: list[str] = []
+        selected_visuals: set[str] = set()
+        candidates_by_id = {finding.media_id: finding for finding in findings}
+        discovery = not any(
+            token in opportunity.objective.lower()
+            for token in (
+                "community",
+                "conversion",
+                "comunidad",
+                "convers",
+                "retention",
+                "depth",
+                "retenc",
+                "profund",
+            )
+        )
+        recent_rows = [
+            row
+            for row in scored
+            if candidates_by_id[row[-1]].timestamp >= latest_captured - timedelta(days=180)
         ]
-        selected_ids = list(dict.fromkeys(supplied_ids + [row[-1] for row in scored]))[:2]
+        ordered_rows = scored[:1] + recent_rows + scored[1:] if discovery and scored else scored
+        for row in ordered_rows:
+            if len(selected_ids) == 2:
+                break
+            media_id = row[-1]
+            finding = candidates_by_id[media_id]
+            visual_key = _visual_key(finding)
+            if (
+                media_id in used_ids
+                or media_id in selected_ids
+                or visual_key in used_visuals
+                or visual_key in selected_visuals
+            ):
+                continue
+            selected_ids.append(media_id)
+            selected_visuals.add(visual_key)
+        if len(selected_ids) < 2:
+            for row in scored:
+                media_id = row[-1]
+                if media_id not in selected_ids and media_id not in used_ids:
+                    selected_ids.append(media_id)
+                if len(selected_ids) == 2:
+                    break
         opportunity.evidence_media_ids = selected_ids
+        used_ids.update(selected_ids)
+        used_visuals.update(_visual_key(candidates_by_id[media_id]) for media_id in selected_ids)
 
         selected = [finding for finding in findings if finding.media_id in selected_ids]
         newest_evidence = max((finding.timestamp for finding in selected), default=latest_captured)
@@ -338,18 +432,18 @@ async def synthesize_account(
         (finding for finding in findings if finding.timestamp >= recent_cutoff),
         key=lambda finding: finding.timestamp,
         reverse=True,
-    )[:30]
+    )[:8]
     recent_ids = {finding.media_id for finding in recent_findings}
-    historical_findings = sorted(
+    proven_response_findings = sorted(
         (finding for finding in findings if finding.media_id not in recent_ids),
         key=lambda finding: (
-            finding.metrics.get("total_interactions") or 0,
-            finding.metrics.get("reach") or 0,
+            _balanced_performance(finding),
+            _response_strength(finding),
         ),
         reverse=True,
     )[:6]
 
-    # Every post contributes compact evidence. Strong posts retain more detail.
+    # Give the model distinct evidence roles so recency is not mistaken for success.
     payload = {
         "account": account.model_dump(mode="json", exclude_none=True),
         "account_insights": [item.model_dump(mode="json") for item in account_insights],
@@ -357,10 +451,16 @@ async def synthesize_account(
         "evidence_scope": {
             "recent_window": "180 days ending at the newest captured post",
             "recent_post_count": len(recent_findings),
-            "historical_reference_count": len(historical_findings),
+            "current_direction_status": _current_direction_status(recent_findings),
+            "proven_response_post_count": len(proven_response_findings),
+            "interpretation": (
+                "Current posts describe the direction being attempted. Proven-response posts "
+                "show mechanics that previously earned both exposure and audience action."
+            ),
         },
-        "recent_posts": [compact_finding(item) for item in recent_findings],
-        "historical_reference_posts": [compact_finding(item) for item in historical_findings],
+        "current_direction_posts": [compact_finding(item) for item in recent_findings],
+        "current_direction_metrics": account_metrics(recent_findings),
+        "proven_response_posts": [compact_finding(item) for item in proven_response_findings],
         "approved_reference_knowledge": knowledge_context or [],
     }
     synthesis = await llm.synthesize(

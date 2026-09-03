@@ -96,7 +96,8 @@ COPY = {
         "top": "TOP CONTENT",
         "top_title": "The posts most relevant to what comes next.",
         "top_intro": (
-            "Recent evidence comes first; older standouts appear only as historical context."
+            "One signal shows the current direction; older standouts reveal proven "
+            "response mechanics."
         ),
         "formats": "FORMAT + CONTENT STRATEGY",
         "formats_title": "Give every recurring format a clear job.",
@@ -245,7 +246,8 @@ COPY = {
         "top": "MEJOR CONTENIDO",
         "top_title": "Los posts más relevantes para lo que viene.",
         "top_intro": (
-            "La evidencia reciente va primero; los destacados antiguos quedan como contexto."
+            "Una señal muestra la dirección actual; los destacados antiguos revelan "
+            "mecanismos de respuesta probados."
         ),
         "formats": "ESTRATEGIA DE FORMATOS Y CONTENIDO",
         "formats_title": "Dale un trabajo claro a cada formato recurrente.",
@@ -669,6 +671,10 @@ def _shorten(value: str | None, limit: int) -> str:
     return shortened + "."
 
 
+def _metric_name(value: str) -> str:
+    return value.replace("_", " ").strip()
+
+
 def _p(text: str, style: ParagraphStyle) -> Paragraph:
     return Paragraph(escape(text), style)
 
@@ -870,7 +876,7 @@ def _opportunity_card(opportunity, background, styles: dict, copy: dict[str, str
         _p(_shorten(opportunity.play, 170), styles["small"]),
         Spacer(1, 4 * mm),
         _p(copy["primary_metric"], styles["metric_label"]),
-        _p(_shorten(opportunity.primary_metric, 70), styles["body_bold"]),
+        _p(_shorten(_metric_name(opportunity.primary_metric), 70), styles["body_bold"]),
     ]
     table = Table([[content]], colWidths=[51 * mm], rowHeights=[121 * mm])
     table.setStyle(
@@ -928,19 +934,12 @@ def _growth_trace_row(
         _p(_shorten(opportunity.opportunity, 105), styles["body_bold"]),
         _p(f"{copy['observed']}: {_shorten(opportunity.evidence, 135)}", styles["small"]),
     ]
-    if opportunity.reference_sources:
-        analysis_cell.append(
-            _p(
-                f"{copy['approved_guidance']}: {_shorten(opportunity.reference_sources[0], 80)}",
-                styles["small"],
-            )
-        )
     action_cell: list[Flowable] = [
         _p(copy["next_move"], styles["metric_label"]),
         _p(_shorten(opportunity.play, 155), styles["small"]),
         Spacer(1, 2 * mm),
         _p(copy["primary_metric"], styles["metric_label"]),
-        _p(_shorten(opportunity.primary_metric, 55), styles["body_bold"]),
+        _p(_shorten(_metric_name(opportunity.primary_metric), 55), styles["body_bold"]),
     ]
     row = Table(
         [[evidence_cell, analysis_cell, action_cell]],
@@ -1001,7 +1000,10 @@ def _production_idea_row(
             f"{copy['response_prompt']}: {_shorten(idea.response_prompt, 120)}",
             styles["small"],
         ),
-        _p(f"{copy['primary_metric']}: {idea.primary_metric}", styles["metric_label"]),
+        _p(
+            f"{copy['primary_metric']}: {_metric_name(idea.primary_metric)}",
+            styles["metric_label"],
+        ),
     ]
     row = Table(
         [[_p(f"{index:02d}", styles["metric_compact"]), details]],
@@ -1303,7 +1305,7 @@ def build_report(
         ),
         reverse=True,
     )
-    ranked = recent_ranked + historical_ranked
+    ranked = recent_ranked[:1] + historical_ranked + recent_ranked[1:]
     image_paths = [
         finding.thumbnail_path
         for finding in ranked
@@ -1675,7 +1677,10 @@ def build_report(
                             styles,
                         ),
                         _experiment_panel(
-                            copy["primary_metric"], experiment.primary_metric, YELLOW, styles
+                            copy["primary_metric"],
+                            _metric_name(experiment.primary_metric),
+                            YELLOW,
+                            styles,
                         ),
                     ]
                 ],

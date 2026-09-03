@@ -39,10 +39,20 @@ Use the account evidence to decide what should happen next. Limit retrospective 
 repeatable patterns, but never claim causation from correlation or invent audience demographics,
 benchmarks, features, or missing data.
 
-Treat recent_posts as the primary evidence for the current strategy. Use historical_reference_posts
-only to identify durable identity or patterns also supported by recent content. Never make an old
-outlier the sole basis of a primary recommendation. The application will attach supporting post IDs,
-confidence labels, and approved source titles after your response; do not invent those fields.
+Treat current_direction_posts as evidence of what the creator is trying now, not automatically as
+evidence of what works. If evidence_scope.current_direction_status says the sample is thin, do not
+build the whole strategy around it or call that format a winner. Use proven_response_posts to find
+older mechanics that earned meaningful audience action, then transfer those mechanics into new,
+original content that fits the current direction. Never tell the creator to return to an old topic
+merely because an old post performed well.
+
+Reach and response answer different questions. High reach with weak interactions means the content
+was distributed but did not yet create a strong response; treat it as a diagnostic or experiment
+input, never as sufficient proof to scale the same content. Prefer patterns supported by both
+exposure and meaningful response. The three opportunities must be materially different and draw on
+different evidence; do not repeat one post, one format, one hook, or one audience question
+throughout the report. The application will attach supporting post IDs, confidence labels, and
+approved source titles after your response; do not invent those fields.
 
 Return valid JSON only:
 {
@@ -100,6 +110,13 @@ Return exactly three production_ideas derived from the growth opportunities. Mak
 original and ready to create: include actual opening copy, a concrete structure, and a natural
 response prompt. Never use a generic request to follow the account. Replies should add useful,
 specific value or reveal demand for the next piece of content.
+
+When the current-direction sample is thin or its response is weak, use the 30-day plan to validate a
+small portfolio rather than multiplying the same idea. Include at least two meaningfully different
+formats or content structures when the account evidence contains them. No more than two production
+ideas may use the same format, and no more than two weeks may repeat the same format. One idea may
+develop the current direction; another should transfer a proven response mechanic from older
+content; the third should test a distinct, evidence-backed route.
 
 Never recommend directly reposting or duplicating the creator's previous posts. A winning post may
 be used only as evidence or as a pattern for a materially new, original variation. Do not say merely

@@ -66,21 +66,28 @@ class LlamaClient:
                 raise
             return json.loads(cleaned[start : end + 1])
 
-    async def _structured_completion(self, model: str, messages: list[dict], schema: type[T]) -> T:
+    async def _structured_completion(
+        self,
+        model: str,
+        messages: list[dict],
+        schema: type[T],
+        *,
+        reasoning_effort: str | None = None,
+    ) -> T:
         error: Exception | None = None
         for attempt in range(self.max_retries + 1):
             started = perf_counter()
             try:
                 logger.debug("→ Local AI request · model=%s · attempt=%d", model, attempt + 1)
-                response = await self.client.post(
-                    "/chat/completions",
-                    json={
-                        "model": model,
-                        "messages": messages,
-                        "temperature": 0.2,
-                        "response_format": {"type": "json_object"},
-                    },
-                )
+                payload = {
+                    "model": model,
+                    "messages": messages,
+                    "temperature": 0.2,
+                    "response_format": {"type": "json_object"},
+                }
+                if reasoning_effort:
+                    payload["reasoning_effort"] = reasoning_effort
+                response = await self.client.post("/chat/completions", json=payload)
                 response.raise_for_status()
                 content = response.json()["choices"][0]["message"]["content"]
                 result = schema.model_validate(self._extract_json(content))
@@ -134,7 +141,12 @@ class LlamaClient:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
-        return await self._structured_completion(self.text_model, messages, schema)
+        return await self._structured_completion(
+            self.text_model,
+            messages,
+            schema,
+            reasoning_effort="low",
+        )
 
     async def embed(
         self,
